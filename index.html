@@ -178,13 +178,13 @@
                     <div class="stat-value" id="weekPoints">0</div>
                     <div class="stat-label">This Week</div>
                 </div>
-                <div class="stat-card" id="pendingCard" style="display: none;">
-                    <div class="stat-value" id="pendingCount">0</div>
-                    <div class="stat-label">Pending Approvals</div>
-                </div>
-                <div class="stat-card alt" id="streakCard">
+                <div class="stat-card">
                     <div class="stat-value" id="bestStreak">0</div>
                     <div class="stat-label">Best Streak 🔥</div>
+                </div>
+                <div class="stat-card alt">
+                    <div class="stat-value" id="pendingMissions">0</div>
+                    <div class="stat-label">My Pending Missions</div>
                 </div>
             </div>
 
@@ -202,7 +202,7 @@
                 <div id="missionsList"></div>
             </div>
 
-            <div id="queueTab" class="tab-content hidden">
+            <div id="queueTabContent" class="tab-content hidden">
                 <div id="queueList"></div>
             </div>
 
@@ -211,7 +211,7 @@
                 <div id="completedList"></div>
             </div>
 
-            <div id="dashboardTab" class="tab-content hidden">
+            <div id="dashboardTabContent" class="tab-content hidden">
                 <div id="dashboardContent"></div>
             </div>
 
@@ -814,13 +814,21 @@
             const addMissionBtn = document.getElementById('addMissionBtn');
             if (addMissionBtn) addMissionBtn.style.display = (isParent || currentFamily.settings.kidsCanCreateTasks) ? 'block' : 'none';
             document.getElementById('addChoreBtn').style.display = isParent ? 'block' : 'none';
-            document.getElementById('pendingCard').style.display = isParent ? 'block' : 'none';
             document.getElementById('addTaskBtn').style.display = (isParent || currentFamily.settings.kidsCanCreateTasks) ? 'block' : 'none';
             
-            // Update pending count (missions + tasks + chores pending approval)
-            const pendingMissions = submissions.filter(s => s.status === 'pending').length;
-            const pendingTasks = tasks.filter(t => t.status === 'submitted').length;
-            document.getElementById('pendingCount').textContent = pendingMissions + pendingTasks;
+            // Update "My Pending Missions" count for everyone
+            if (isParent) {
+                // Parents see total pending approvals
+                const pendingSubmissions = submissions.filter(s => s.status === 'pending').length;
+                const pendingTasks = tasks.filter(t => t.status === 'submitted').length;
+                document.getElementById('pendingMissions').textContent = pendingSubmissions + pendingTasks;
+            } else {
+                // Kids see their own pending missions (submitted awaiting approval + pending approval requests)
+                const mySubmissions = submissions.filter(s => s.status === 'pending' && s.userId === currentUser.uid).length;
+                const myTasks = tasks.filter(t => t.status === 'submitted' && t.submittedBy === currentUser.uid).length;
+                const myPendingRequests = missions.filter(m => m.status === 'pending_approval' && m.requestedBy === currentUser.uid).length;
+                document.getElementById('pendingMissions').textContent = mySubmissions + myTasks + myPendingRequests;
+            }
             
             // Update queue, approvals, completed, and dashboard
             if (isParent) {
@@ -905,12 +913,12 @@
             }
             let html = '';
             ps.forEach(s => {
-                const c = chores.find(x => x.id === s.choreId);
+                const c = missions.find(x => x.id === s.choreId) || chores.find(x => x.id === s.choreId);
                 const m = familyMembers.find(x => x.userId === s.userId);
                 html += `
                     <div class="card pending" onclick="showReview('${s.id}', 'chore')">
                         <div class="card-header">
-                            <div class="card-title">🧹 ${c?.name || 'Unknown'}</div>
+                            <div class="card-title">${c?.isSideMission ? '⭐' : '🧹'} ${c?.name || 'Unknown'}</div>
                             <span class="card-badge points">${c?.points || 0} pts</span>
                         </div>
                         <div class="card-body"><p><strong>By:</strong> ${m?.displayName || 'Unknown'}</p>${s.notes ? `<p>${s.notes}</p>` : ''}</div>
@@ -1339,16 +1347,76 @@
         window.showCompleteMission = (id) => {
             const mission = missions.find(m => m.id === id);
             if (!mission) return;
-            document.getElementById('completeMissionInfo').innerHTML = `
-                <div class="card-body">
-                    <p><strong>Mission:</strong> ${mission.name}${mission.isSideMission ? ' ⭐' : ''}</p>
-                    <p><strong>Points:</strong> ${mission.points}</p>
-                </div>
-            `;
-            document.getElementById('missionNotes').value = '';
-            window.selectedMission = mission;
-            showModal('completeMissionModal');
+            
+            // Check if parent assigned to themselves only
+            const isParent = currentMember && currentMember.role === 'parent';
+            const isSelfAssigned = mission.assignedTo.length === 1 && mission.assignedTo[0] === currentUser.uid;
+            
+            if (isParent && isSelfAssigned) {
+                // Auto-complete for parent self-assigned missions
+                if (confirm(`Mark "${mission.name}" as complete?`)) {
+                    completeSelfMission(mission);
+                }
+            } else {
+                // Normal submission flow for approval
+                document.getElementById('completeMissionInfo').innerHTML = `
+                    <div class="card-body">
+                        <p><strong>Mission:</strong> ${mission.name}${mission.isSideMission ? ' ⭐' : ''}</p>
+                        <p><strong>Points:</strong> ${mission.points}</p>
+                    </div>
+                `;
+                document.getElementById('missionNotes').value = '';
+                window.selectedMission = mission;
+                showModal('completeMissionModal');
+            }
         };
+
+        async function completeSelfMission(mission) {
+            try {
+                // Calculate points with decay if overdue
+                let finalPoints = mission.points;
+                if (mission.dueDate) {
+                    const dueDate = mission.dueDate.toDate ? mission.dueDate.toDate() : new Date(mission.dueDate);
+                    const now = new Date();
+                    const daysOverdue = Math.floor((now - dueDate) / (1000 * 60 * 60 * 24));
+                    if (daysOverdue > 0) {
+                        const decayPercent = Math.min(daysOverdue * 10, 90);
+                        finalPoints = Math.max(Math.round(mission.points * (1 - decayPercent / 100)), 1);
+                    }
+                }
+                
+                // Add to points ledger
+                await addDoc(collection(db, 'pointsLedger'), {
+                    familyId: currentFamily.id,
+                    userId: currentUser.uid,
+                    points: finalPoints,
+                    source: 'mission',
+                    sourceId: mission.id,
+                    awardedBy: currentUser.uid,
+                    awardedAt: serverTimestamp(),
+                    description: `Completed: ${mission.name}${mission.isSideMission ? ' ⭐' : ''}${finalPoints < mission.points ? ` (${mission.points - finalPoints} pts deducted for late)` : ''}`
+                });
+                
+                // Create completed submission record
+                await addDoc(collection(db, 'choreSubmissions'), {
+                    familyId: currentFamily.id,
+                    choreId: mission.id,
+                    userId: currentUser.uid,
+                    submittedAt: serverTimestamp(),
+                    status: 'approved',
+                    reviewedBy: currentUser.uid,
+                    reviewedAt: serverTimestamp(),
+                    pointsAwarded: finalPoints,
+                    notes: 'Self-completed',
+                    isMission: true
+                });
+                
+                alert(`Mission completed! +${finalPoints} points`);
+            } catch (e) {
+                console.error('Error completing mission:', e);
+                alert('Failed to complete mission');
+            }
+        }
 
         window.submitMissionCompletion = async () => {
             if (!window.selectedMission) return;
@@ -1512,10 +1580,10 @@
             
             const tabs = { 
                 missions: 'missionsTab', 
-                queue: 'queueTab', 
+                queue: 'queueTabContent', 
                 approvals: 'approvalsTabContent', 
                 completed: 'completedTab',
-                dashboard: 'dashboardTab',
+                dashboard: 'dashboardTabContent',
                 settings: 'settingsTab',
                 chores: 'choresTab', 
                 tasks: 'tasksTab'
