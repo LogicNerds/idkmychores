@@ -29,7 +29,7 @@
         .theme-btn, .logout-btn { background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3); color: white; padding: 8px 12px; border-radius: 8px; cursor: pointer; transition: background 0.2s; }
         .theme-btn:hover, .logout-btn:hover { background: rgba(255,255,255,0.3); }
         .user-avatar { width: 40px; height: 40px; border-radius: 50%; border: 2px solid white; }
-        .main-content { padding: 100px 20px 80px 20px; }
+        .main-content { padding: 20px 20px 80px 20px; }
         .stats-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; margin-bottom: 25px; }
         .stat-card { background: linear-gradient(135deg, var(--balance-start) 0%, var(--balance-end) 100%); color: white; padding: 20px; border-radius: 16px; text-align: center; }
         .stat-card.alt { background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); }
@@ -283,6 +283,17 @@
                     <option value="asneeded">As Needed</option>
                 </select>
             </div>
+            <div class="form-group">
+                <label>Assign To</label>
+                <select id="choreAssignee" multiple style="height: 80px;">
+                    <option value="">Unassigned (Anyone can do)</option>
+                </select>
+                <small style="color: #999; font-size: 0.85em;">Hold Ctrl/Cmd to select multiple</small>
+            </div>
+            <div class="form-group">
+                <label>Due Date (Optional)</label>
+                <input type="date" id="choreDueDate">
+            </div>
             <div class="modal-buttons">
                 <button class="modal-btn secondary" onclick="closeModal('addChoreModal')">Cancel</button>
                 <button class="modal-btn primary" onclick="addChore()">Add Chore</button>
@@ -311,6 +322,10 @@
             <div class="form-group">
                 <label>Assign To</label>
                 <select id="taskAssignee"></select>
+            </div>
+            <div class="form-group">
+                <label>Due Date (Optional)</label>
+                <input type="date" id="taskDueDate">
             </div>
             <div class="modal-buttons">
                 <button class="modal-btn secondary" onclick="closeModal('addTaskModal')">Cancel</button>
@@ -775,19 +790,41 @@
             const am = familyMembers.filter(m => m.status === 'active');
             document.getElementById('taskAssignee').innerHTML = '<option value="">Select...</option>' + 
                 am.map(m => `<option value="${m.userId}">${m.displayName}</option>`).join('');
+            document.getElementById('choreAssignee').innerHTML = '<option value="">Unassigned (Anyone can do)</option>' + 
+                am.map(m => `<option value="${m.userId}">${m.displayName}</option>`).join('');
         }
 
         window.addChore = async () => {
             const name = document.getElementById('choreName').value.trim();
             if (!name) return alert('Enter chore name');
+            
+            const assigneeSelect = document.getElementById('choreAssignee');
+            const selectedOptions = Array.from(assigneeSelect.selectedOptions);
+            const assignedTo = selectedOptions
+                .map(opt => opt.value)
+                .filter(val => val !== ''); // Filter out "Unassigned" option
+            
+            const dueDateInput = document.getElementById('choreDueDate').value;
+            const dueDate = dueDateInput ? new Date(dueDateInput + 'T23:59:59') : null;
+            
             try {
                 await addDoc(collection(db, 'chores'), {
-                    familyId: currentFamily.id, name, description: document.getElementById('choreDescription').value.trim(),
-                    points: selectedPoints, frequency: document.getElementById('choreFrequency').value,
-                    assignedTo: [], createdBy: currentUser.uid, createdAt: serverTimestamp(), isActive: true
+                    familyId: currentFamily.id, 
+                    name, 
+                    description: document.getElementById('choreDescription').value.trim(),
+                    points: selectedPoints, 
+                    frequency: document.getElementById('choreFrequency').value,
+                    assignedTo: assignedTo,
+                    dueDate: dueDate ? Timestamp.fromDate(dueDate) : null,
+                    createdBy: currentUser.uid, 
+                    createdAt: serverTimestamp(), 
+                    isActive: true
                 });
                 closeModal('addChoreModal');
-                document.getElementById('choreName').value = ''; document.getElementById('choreDescription').value = '';
+                document.getElementById('choreName').value = ''; 
+                document.getElementById('choreDescription').value = '';
+                document.getElementById('choreDueDate').value = '';
+                assigneeSelect.selectedIndex = 0;
             } catch (e) { console.error(e); alert('Failed to add chore'); }
         };
 
@@ -795,13 +832,20 @@
             const title = document.getElementById('taskTitle').value.trim();
             const assignedTo = document.getElementById('taskAssignee').value;
             if (!title || !assignedTo) return alert('Fill all fields');
+            
+            const dueDateInput = document.getElementById('taskDueDate').value;
+            const dueDate = dueDateInput ? new Date(dueDateInput + 'T23:59:59') : null;
+            
             try {
                 await addDoc(collection(db, 'tasks'), {
                     familyId: currentFamily.id, title, points: selectedTaskPoints, assignedTo,
+                    dueDate: dueDate ? Timestamp.fromDate(dueDate) : null,
                     createdBy: currentUser.uid, status: 'open', createdAt: serverTimestamp()
                 });
                 closeModal('addTaskModal');
-                document.getElementById('taskTitle').value = ''; document.getElementById('taskAssignee').value = '';
+                document.getElementById('taskTitle').value = ''; 
+                document.getElementById('taskAssignee').value = '';
+                document.getElementById('taskDueDate').value = '';
             } catch (e) { console.error(e); alert('Failed to add task'); }
         };
 
@@ -885,11 +929,29 @@
                 if (selectedSubmission.type === 'task') {
                     const t = tasks.find(x => x.id === selectedSubmission.id);
                     if (action === 'approve') {
+                        // Calculate point decay for overdue tasks
+                        let finalPoints = t.points;
+                        if (t.dueDate) {
+                            const dueDate = t.dueDate.toDate ? t.dueDate.toDate() : new Date(t.dueDate);
+                            const submittedDate = t.submittedAt?.toDate ? t.submittedAt.toDate() : new Date();
+                            const daysOverdue = Math.floor((submittedDate - dueDate) / (1000 * 60 * 60 * 24));
+                            if (daysOverdue > 0) {
+                                const decayPercent = Math.min(daysOverdue * 10, 90); // Max 90% decay
+                                finalPoints = Math.max(Math.round(t.points * (1 - decayPercent / 100)), 1); // Min 1 point
+                            }
+                        }
+                        
                         await addDoc(collection(db, 'pointsLedger'), {
-                            familyId: currentFamily.id, userId: t.submittedBy, points: t.points, source: 'task',
-                            sourceId: t.id, awardedBy: currentUser.uid, awardedAt: serverTimestamp(), description: `Completed: ${t.title}`
+                            familyId: currentFamily.id, userId: t.submittedBy, points: finalPoints, source: 'task',
+                            sourceId: t.id, awardedBy: currentUser.uid, awardedAt: serverTimestamp(), 
+                            description: `Completed: ${t.title}${finalPoints < t.points ? ` (${t.points - finalPoints} pts deducted for late)` : ''}`
                         });
-                        await updateDoc(doc(db, 'tasks', t.id), { status: 'approved', reviewedBy: currentUser.uid, reviewedAt: serverTimestamp() });
+                        await updateDoc(doc(db, 'tasks', t.id), { 
+                            status: 'approved', 
+                            reviewedBy: currentUser.uid, 
+                            reviewedAt: serverTimestamp(),
+                            pointsAwarded: finalPoints
+                        });
                     } else {
                         await updateDoc(doc(db, 'tasks', t.id), {
                             status: 'rejected', reviewedBy: currentUser.uid, reviewedAt: serverTimestamp(),
@@ -899,12 +961,25 @@
                 } else {
                     const c = chores.find(x => x.id === selectedSubmission.choreId);
                     if (action === 'approve') {
+                        // Calculate point decay for overdue chores
+                        let finalPoints = c.points;
+                        if (c.dueDate) {
+                            const dueDate = c.dueDate.toDate ? c.dueDate.toDate() : new Date(c.dueDate);
+                            const submittedDate = selectedSubmission.submittedAt?.toDate ? selectedSubmission.submittedAt.toDate() : new Date();
+                            const daysOverdue = Math.floor((submittedDate - dueDate) / (1000 * 60 * 60 * 24));
+                            if (daysOverdue > 0) {
+                                const decayPercent = Math.min(daysOverdue * 10, 90); // Max 90% decay
+                                finalPoints = Math.max(Math.round(c.points * (1 - decayPercent / 100)), 1); // Min 1 point
+                            }
+                        }
+                        
                         await addDoc(collection(db, 'pointsLedger'), {
-                            familyId: currentFamily.id, userId: selectedSubmission.userId, points: c.points, source: 'chore',
-                            sourceId: selectedSubmission.id, awardedBy: currentUser.uid, awardedAt: serverTimestamp(), description: `Completed: ${c.name}`
+                            familyId: currentFamily.id, userId: selectedSubmission.userId, points: finalPoints, source: 'chore',
+                            sourceId: selectedSubmission.id, awardedBy: currentUser.uid, awardedAt: serverTimestamp(), 
+                            description: `Completed: ${c.name}${finalPoints < c.points ? ` (${c.points - finalPoints} pts deducted for late)` : ''}`
                         });
                         await updateDoc(doc(db, 'choreSubmissions', selectedSubmission.id), {
-                            status: 'approved', reviewedBy: currentUser.uid, reviewedAt: serverTimestamp(), pointsAwarded: c.points
+                            status: 'approved', reviewedBy: currentUser.uid, reviewedAt: serverTimestamp(), pointsAwarded: finalPoints
                         });
                     } else {
                         await updateDoc(doc(db, 'choreSubmissions', selectedSubmission.id), {
