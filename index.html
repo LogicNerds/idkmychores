@@ -188,7 +188,9 @@
 
             <div class="nav-tabs">
                 <div class="nav-tab active" onclick="switchTab('missions')">My Missions</div>
-                <div class="nav-tab" id="queueTab" onclick="switchTab('queue')" style="display: none;">Queue</div>
+                <div class="nav-tab" id="queueTab" onclick="switchTab('queue')" style="display: none;">
+                    Queue <span id="queueCount" style="background: #ef4444; color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.85em; margin-left: 5px;"></span>
+                </div>
                 <div class="nav-tab" id="completedTabBtn" onclick="switchTab('completed')" style="display: none;">Completed</div>
                 <div class="nav-tab" id="dashboardTab" onclick="switchTab('dashboard')" style="display: none;">Family Dashboard</div>
                 <div class="nav-tab" onclick="switchTab('settings')">Settings</div>
@@ -1063,12 +1065,22 @@
             list.innerHTML = visibleMissions.map(m => {
                 const isOverdue = m.dueDate && new Date() > (m.dueDate.toDate ? m.dueDate.toDate() : new Date(m.dueDate));
                 const pointsClass = m.isSideMission ? 'side-mission-points' : 'points';
+                
+                // Check if this mission has a pending submission from current user
+                const hasPendingSubmission = submissions.some(s => 
+                    s.choreId === m.id && 
+                    s.status === 'pending' && 
+                    s.userId === currentUser.uid
+                );
+                
                 return `
-                    <div class="card" onclick="showCompleteMission('${m.id}')">
+                    <div class="card ${hasPendingSubmission ? 'pending' : ''}" 
+                         ${hasPendingSubmission ? 'style="opacity: 0.7; cursor: default;"' : `onclick="showCompleteMission('${m.id}')"`}>
                         <div class="card-header">
                             <div class="card-title">
                                 ${m.name}
                                 ${m.isSideMission ? '<span class="card-badge side-mission">⭐ SIDE MISSION</span>' : ''}
+                                ${hasPendingSubmission ? '<span class="card-badge" style="background: #fbbf24;">⏳ PENDING APPROVAL</span>' : ''}
                             </div>
                             <span class="card-badge ${pointsClass}">${m.points} pts</span>
                         </div>
@@ -1219,6 +1231,18 @@
             }
             
             list.innerHTML = html;
+            
+            // Update Queue count badge
+            const totalPending = pendingSubmissions.length + pendingTasks.length;
+            const queueCountEl = document.getElementById('queueCount');
+            if (queueCountEl) {
+                if (totalPending > 0) {
+                    queueCountEl.textContent = totalPending;
+                    queueCountEl.style.display = 'inline';
+                } else {
+                    queueCountEl.style.display = 'none';
+                }
+            }
         }
 
         function updateCompleted() {
