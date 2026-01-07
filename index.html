@@ -181,14 +181,30 @@
             </div>
 
             <div class="nav-tabs">
-                <div class="nav-tab active" onclick="switchTab('missions')">Missions</div>
+                <div class="nav-tab active" onclick="switchTab('missions')">My Missions</div>
+                <div class="nav-tab" id="queueTab" onclick="switchTab('queue')" style="display: none;">Queue</div>
                 <div class="nav-tab" id="approvalsTab" onclick="switchTab('approvals')" style="display: none;">Approvals</div>
+                <div class="nav-tab" id="completedTab" onclick="switchTab('completed')" style="display: none;">Completed</div>
+                <div class="nav-tab" id="dashboardTab" onclick="switchTab('dashboard')" style="display: none;">Family Dashboard</div>
                 <div class="nav-tab" onclick="switchTab('settings')">Settings</div>
             </div>
 
             <div id="missionsTab" class="tab-content">
                 <button class="add-btn" onclick="showModal('addMissionModal')" id="addMissionBtn">+ Add Mission</button>
                 <div id="missionsList"></div>
+            </div>
+
+            <div id="queueTab" class="tab-content hidden">
+                <div id="queueList"></div>
+            </div>
+
+            <div id="completedTab" class="tab-content hidden">
+                <button class="add-btn" onclick="clearCompleted()" style="background: #dc2626;">Clear Completed List</button>
+                <div id="completedList"></div>
+            </div>
+
+            <div id="dashboardTab" class="tab-content hidden">
+                <div id="dashboardContent"></div>
             </div>
 
             <div id="tasksTab" class="tab-content hidden">
@@ -260,8 +276,8 @@
 
     <div id="addMissionModal" class="modal">
         <div class="modal-content">
-            <h2>Add Mission</h2>
-            <div class="form-group">
+            <h2 id="addMissionModalTitle">Add Mission</h2>
+            <div class="form-group" id="missionSideMissionGroup">
                 <div style="display: flex; align-items: center; gap: 10px;">
                     <input type="checkbox" id="isSideMission" style="width: auto; cursor: pointer;">
                     <label for="isSideMission" style="margin: 0; cursor: pointer;">⭐ Side Mission (Extra Credit)</label>
@@ -275,7 +291,7 @@
                 <label>Description</label>
                 <textarea id="missionDescription" placeholder="What needs to be done?"></textarea>
             </div>
-            <div class="form-group">
+            <div class="form-group" id="missionPointsGroup">
                 <label>Points Value</label>
                 <div class="points-picker">
                     <button type="button" class="points-btn" onclick="selectMissionPoints(1, this)">1</button>
@@ -286,7 +302,7 @@
                     <button type="button" class="points-btn" onclick="selectMissionPoints(13, this)">13</button>
                 </div>
             </div>
-            <div class="form-group">
+            <div class="form-group" id="missionFrequencyGroup">
                 <label>Frequency</label>
                 <select id="missionFrequency">
                     <option value="daily">Daily</option>
@@ -294,7 +310,7 @@
                     <option value="asneeded">As Needed</option>
                 </select>
             </div>
-            <div class="form-group">
+            <div class="form-group" id="missionAssigneeGroup">
                 <label>Assign To</label>
                 <select id="missionAssignee" multiple style="height: 80px;">
                     <option value="">Unassigned (Anyone can do)</option>
@@ -308,6 +324,47 @@
             <div class="modal-buttons">
                 <button class="modal-btn secondary" onclick="closeModal('addMissionModal')">Cancel</button>
                 <button class="modal-btn primary" onclick="addMission()">Add Mission</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="editMissionModal" class="modal">
+        <div class="modal-content">
+            <h2>Approve Mission Request</h2>
+            <input type="hidden" id="editMissionId">
+            <div class="form-group">
+                <label>Mission Name</label>
+                <input type="text" id="editMissionName" readonly style="background: #f0f0f0;">
+            </div>
+            <div class="form-group">
+                <label>Description</label>
+                <textarea id="editMissionDescription" readonly style="background: #f0f0f0;"></textarea>
+            </div>
+            <div class="form-group">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <input type="checkbox" id="editIsSideMission" style="width: auto; cursor: pointer;">
+                    <label for="editIsSideMission" style="margin: 0; cursor: pointer;">⭐ Side Mission (Extra Credit)</label>
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Points Value</label>
+                <input type="number" id="editMissionPoints" value="3" min="1" max="100">
+            </div>
+            <div class="form-group">
+                <label>Frequency</label>
+                <select id="editMissionFrequency">
+                    <option value="daily">Daily</option>
+                    <option value="weekly">Weekly</option>
+                    <option value="asneeded">As Needed</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Due Date</label>
+                <input type="date" id="editMissionDueDate">
+            </div>
+            <div class="modal-buttons">
+                <button class="modal-btn secondary" onclick="closeModal('editMissionModal')">Cancel</button>
+                <button class="modal-btn primary" onclick="approveMissionEdit()">Approve Mission</button>
             </div>
         </div>
     </div>
@@ -694,11 +751,11 @@
             }));
             
             unsubAll.push(onSnapshot(query(collection(db, 'chores'), where('familyId', '==', currentFamily.id)), s => {
-                chores = []; s.forEach(d => chores.push({ id: d.id, ...d.data() })); updateChores();
+                chores = []; s.forEach(d => chores.push({ id: d.id, ...d.data() }));
             }));
             
             unsubAll.push(onSnapshot(query(collection(db, 'tasks'), where('familyId', '==', currentFamily.id)), s => {
-                tasks = []; s.forEach(d => tasks.push({ id: d.id, ...d.data() })); updateTasks();
+                tasks = []; s.forEach(d => tasks.push({ id: d.id, ...d.data() }));
             }));
             
             unsubAll.push(onSnapshot(query(collection(db, 'missions'), where('familyId', '==', currentFamily.id)), s => {
@@ -734,14 +791,34 @@
             
             if (!currentMember) return;
             const isParent = currentMember.role === 'parent';
+            
+            // Show/hide parent-only tabs
+            document.getElementById('queueTab').style.display = isParent ? 'block' : 'none';
+            document.getElementById('approvalsTab').style.display = isParent ? 'block' : 'none';
+            document.getElementById('completedTab').style.display = isParent ? 'block' : 'none';
+            document.getElementById('dashboardTab').style.display = isParent ? 'block' : 'none';
+            
+            // Show/hide parent-only elements
             document.getElementById('parentSettings').style.display = isParent ? 'block' : 'none';
             document.getElementById('addMemberBtn').style.display = isParent ? 'block' : 'none';
             const addMissionBtn = document.getElementById('addMissionBtn');
             if (addMissionBtn) addMissionBtn.style.display = (isParent || currentFamily.settings.kidsCanCreateTasks) ? 'block' : 'none';
             document.getElementById('addChoreBtn').style.display = isParent ? 'block' : 'none';
-            document.getElementById('approvalsTab').style.display = isParent ? 'block' : 'none';
             document.getElementById('pendingCard').style.display = isParent ? 'block' : 'none';
             document.getElementById('addTaskBtn').style.display = (isParent || currentFamily.settings.kidsCanCreateTasks) ? 'block' : 'none';
+            
+            // Update pending count (missions + tasks + chores pending approval)
+            const pendingMissions = submissions.filter(s => s.status === 'pending').length;
+            const pendingTasks = tasks.filter(t => t.status === 'submitted').length;
+            document.getElementById('pendingCount').textContent = pendingMissions + pendingTasks;
+            
+            // Update queue, approvals, completed, and dashboard
+            if (isParent) {
+                updateQueue();
+                updateApprovals();
+                updateCompleted();
+                updateDashboard();
+            }
             
             // Update checkbox states
             if (isParent) {
@@ -935,40 +1012,67 @@
             const name = document.getElementById('missionName').value.trim();
             if (!name) return alert('Enter mission name');
             
-            const isSideMission = document.getElementById('isSideMission').checked;
-            const assigneeSelect = document.getElementById('missionAssignee');
-            const selectedOptions = Array.from(assigneeSelect.selectedOptions);
-            const assignedTo = selectedOptions.map(opt => opt.value).filter(val => val !== '');
+            const isParent = currentMember && currentMember.role === 'parent';
             const dueDateInput = document.getElementById('missionDueDate').value;
             const dueDate = dueDateInput ? new Date(dueDateInput + 'T23:59:59') : null;
             
             try {
-                await addDoc(collection(db, 'missions'), {
-                    familyId: currentFamily.id,
-                    name,
-                    description: document.getElementById('missionDescription').value.trim(),
-                    points: selectedMissionPoints,
-                    frequency: document.getElementById('missionFrequency').value,
-                    assignedTo: assignedTo,
-                    dueDate: dueDate ? Timestamp.fromDate(dueDate) : null,
-                    isSideMission: isSideMission,
-                    createdBy: currentUser.uid,
-                    createdAt: serverTimestamp(),
-                    isActive: true
-                });
+                if (isParent) {
+                    // Parent creates mission normally
+                    const isSideMission = document.getElementById('isSideMission').checked;
+                    const assigneeSelect = document.getElementById('missionAssignee');
+                    const selectedOptions = Array.from(assigneeSelect.selectedOptions);
+                    const assignedTo = selectedOptions.map(opt => opt.value).filter(val => val !== '');
+                    
+                    await addDoc(collection(db, 'missions'), {
+                        familyId: currentFamily.id,
+                        name,
+                        description: document.getElementById('missionDescription').value.trim(),
+                        points: selectedMissionPoints,
+                        frequency: document.getElementById('missionFrequency').value,
+                        assignedTo: assignedTo,
+                        dueDate: dueDate ? Timestamp.fromDate(dueDate) : null,
+                        isSideMission: isSideMission,
+                        createdBy: currentUser.uid,
+                        createdAt: serverTimestamp(),
+                        isActive: true,
+                        status: 'active'
+                    });
+                } else {
+                    // Kid creates mission request (goes to parent approval queue)
+                    await addDoc(collection(db, 'missions'), {
+                        familyId: currentFamily.id,
+                        name,
+                        description: document.getElementById('missionDescription').value.trim(),
+                        points: 0, // Parent will set
+                        frequency: 'asneeded',
+                        assignedTo: [currentUser.uid], // Auto-assign to self
+                        dueDate: dueDate ? Timestamp.fromDate(dueDate) : null,
+                        isSideMission: false,
+                        createdBy: currentUser.uid,
+                        createdAt: serverTimestamp(),
+                        isActive: false, // Inactive until parent approves
+                        status: 'pending_approval',
+                        requestedBy: currentUser.uid
+                    });
+                    alert('Mission request sent to parent for approval!');
+                }
+                
                 closeModal('addMissionModal');
                 document.getElementById('missionName').value = '';
                 document.getElementById('missionDescription').value = '';
                 document.getElementById('missionDueDate').value = '';
                 document.getElementById('isSideMission').checked = false;
-                assigneeSelect.selectedIndex = 0;
             } catch (e) { console.error(e); alert('Failed to add mission'); }
         };
 
         function updateMissions() {
             const list = document.getElementById('missionsList');
-            const visibleMissions = missions.filter(m => m.isActive && 
-                (m.assignedTo.length === 0 || m.assignedTo.includes(currentUser.uid)));
+            const visibleMissions = missions.filter(m => 
+                m.isActive && 
+                m.status === 'active' &&
+                (m.assignedTo.length === 0 || m.assignedTo.includes(currentUser.uid))
+            );
             
             if (visibleMissions.length === 0) {
                 list.innerHTML = '<div class="empty-state"><div class="empty-state-icon">🎯</div><p>No missions yet</p></div>';
@@ -996,6 +1100,214 @@
                 `;
             }).join('');
         }
+
+        function updateQueue() {
+            const list = document.getElementById('queueList');
+            // Show active missions + pending mission requests from kids
+            const queueMissions = missions.filter(m => 
+                (m.status === 'active' && m.isActive) || m.status === 'pending_approval'
+            );
+            
+            if (queueMissions.length === 0) {
+                list.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📋</div><p>No missions in queue</p></div>';
+                return;
+            }
+            
+            list.innerHTML = queueMissions.map(m => {
+                const isPendingApproval = m.status === 'pending_approval';
+                const requester = isPendingApproval ? familyMembers.find(fm => fm.userId === m.requestedBy) : null;
+                const assignees = m.assignedTo.map(id => familyMembers.find(fm => fm.userId === id)?.displayName || 'Unknown').join(', ') || 'Unassigned';
+                const isOverdue = m.dueDate && new Date() > (m.dueDate.toDate ? m.dueDate.toDate() : new Date(m.dueDate));
+                
+                return `
+                    <div class="card" ${isPendingApproval ? `onclick="approveMissionRequest('${m.id}')"` : ''}>
+                        <div class="card-header">
+                            <div class="card-title">
+                                ${m.name}
+                                ${isPendingApproval ? '<span class="card-badge" style="background: #fbbf24;">⏳ PENDING APPROVAL</span>' : ''}
+                                ${m.isSideMission ? '<span class="card-badge side-mission">⭐ SIDE MISSION</span>' : ''}
+                            </div>
+                            <span class="card-badge ${m.isSideMission ? 'side-mission-points' : 'points'}">${m.points} pts</span>
+                        </div>
+                        <div class="card-body">
+                            ${m.description ? `<p>${m.description}</p>` : ''}
+                            ${isPendingApproval ? `<p><strong>Requested by:</strong> ${requester?.displayName || 'Unknown'}</p>` : ''}
+                            <p><strong>Assigned to:</strong> ${assignees}</p>
+                            ${m.dueDate ? `<p style="color: ${isOverdue ? '#dc2626' : '#666'}">Due: ${(m.dueDate.toDate ? m.dueDate.toDate() : new Date(m.dueDate)).toLocaleDateString()}${isOverdue ? ' ⚠️ OVERDUE' : ''}</p>` : ''}
+                            <p><strong>Frequency:</strong> ${m.frequency}</p>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function updateCompleted() {
+            const list = document.getElementById('completedList');
+            const completedItems = [
+                ...submissions.filter(s => s.status === 'approved').map(s => ({
+                    type: 'mission',
+                    ...s,
+                    mission: missions.find(m => m.id === s.choreId) || chores.find(c => c.id === s.choreId)
+                })),
+                ...tasks.filter(t => t.status === 'approved').map(t => ({
+                    type: 'task',
+                    ...t
+                }))
+            ].sort((a, b) => {
+                const aTime = a.reviewedAt?.toMillis ? a.reviewedAt.toMillis() : 0;
+                const bTime = b.reviewedAt?.toMillis ? b.reviewedAt.toMillis() : 0;
+                return bTime - aTime;
+            });
+            
+            if (completedItems.length === 0) {
+                list.innerHTML = '<div class="empty-state"><div class="empty-state-icon">✅</div><p>No completed missions yet</p></div>';
+                return;
+            }
+            
+            list.innerHTML = completedItems.map(item => {
+                const member = familyMembers.find(m => m.userId === (item.userId || item.submittedBy));
+                const name = item.type === 'mission' ? item.mission?.name : item.title;
+                const points = item.pointsAwarded || item.points;
+                
+                return `
+                    <div class="card" style="opacity: 0.7;">
+                        <div class="card-header">
+                            <div class="card-title">${name}</div>
+                            <span class="card-badge points">${points} pts</span>
+                        </div>
+                        <div class="card-body">
+                            <p><strong>Completed by:</strong> ${member?.displayName || 'Unknown'}</p>
+                            <p><strong>Approved:</strong> ${(item.reviewedAt?.toDate ? item.reviewedAt.toDate() : new Date()).toLocaleDateString()}</p>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function updateDashboard() {
+            const content = document.getElementById('dashboardContent');
+            const activeMembers = familyMembers.filter(m => m.status === 'active');
+            
+            // Calculate stats per member
+            const memberStats = activeMembers.map(member => {
+                const memberPoints = pointsHistory.filter(p => p.userId === member.userId);
+                const totalPoints = memberPoints.reduce((sum, p) => sum + p.points, 0);
+                const thisWeek = memberPoints.filter(p => {
+                    const date = p.awardedAt?.toDate ? p.awardedAt.toDate() : new Date();
+                    const weekAgo = new Date();
+                    weekAgo.setDate(weekAgo.getDate() - 7);
+                    return date >= weekAgo;
+                }).reduce((sum, p) => sum + p.points, 0);
+                
+                const memberMissions = missions.filter(m => 
+                    m.assignedTo.includes(member.userId) && m.status === 'active'
+                ).length;
+                
+                return { member, totalPoints, thisWeek, activeMissions: memberMissions };
+            });
+            
+            content.innerHTML = `
+                <div style="margin-bottom: 30px;">
+                    <h3 style="color: #333; margin-bottom: 15px;">Family Overview</h3>
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <div class="stat-value">${missions.filter(m => m.status === 'active').length}</div>
+                            <div class="stat-label">Active Missions</div>
+                        </div>
+                        <div class="stat-card alt">
+                            <div class="stat-value">${missions.filter(m => m.status === 'pending_approval').length}</div>
+                            <div class="stat-label">Pending Requests</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value">${submissions.filter(s => s.status === 'pending').length + tasks.filter(t => t.status === 'submitted').length}</div>
+                            <div class="stat-label">Awaiting Approval</div>
+                        </div>
+                        <div class="stat-card alt">
+                            <div class="stat-value">${pointsHistory.reduce((sum, p) => sum + p.points, 0)}</div>
+                            <div class="stat-label">Total Family Points</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <h3 style="color: #333; margin-bottom: 15px;">Individual Members</h3>
+                ${memberStats.map(stat => `
+                    <div class="card" style="margin-bottom: 15px;">
+                        <div class="card-header">
+                            <div class="card-title">${stat.member.displayName}</div>
+                            <span class="card-badge points">${stat.totalPoints} pts</span>
+                        </div>
+                        <div class="card-body">
+                            <p><strong>This Week:</strong> ${stat.thisWeek} points</p>
+                            <p><strong>Active Missions:</strong> ${stat.activeMissions}</p>
+                            <p><strong>Role:</strong> ${stat.member.role === 'parent' ? '👨‍👩‍👧‍👦 Parent' : '👶 Kid'}</p>
+                        </div>
+                    </div>
+                `).join('')}
+            `;
+        }
+
+        window.clearCompleted = async () => {
+            if (!confirm('Clear all completed missions from the list? This cannot be undone.')) return;
+            
+            try {
+                const completedSubmissions = submissions.filter(s => s.status === 'approved');
+                const completedTasks = tasks.filter(t => t.status === 'approved');
+                
+                for (const sub of completedSubmissions) {
+                    await deleteDoc(doc(db, 'choreSubmissions', sub.id));
+                }
+                for (const task of completedTasks) {
+                    await deleteDoc(doc(db, 'tasks', task.id));
+                }
+                
+                alert('Completed list cleared!');
+            } catch (e) {
+                console.error(e);
+                alert('Failed to clear completed list');
+            }
+        };
+
+        window.approveMissionRequest = (id) => {
+            const mission = missions.find(m => m.id === id);
+            if (!mission || mission.status !== 'pending_approval') return;
+            
+            // Pre-fill edit modal with mission data
+            document.getElementById('editMissionId').value = id;
+            document.getElementById('editMissionName').value = mission.name;
+            document.getElementById('editMissionDescription').value = mission.description || '';
+            document.getElementById('editMissionDueDate').value = mission.dueDate ? 
+                (mission.dueDate.toDate ? mission.dueDate.toDate() : new Date(mission.dueDate)).toISOString().split('T')[0] : '';
+            
+            showModal('editMissionModal');
+        };
+
+        window.approveMissionEdit = async () => {
+            const id = document.getElementById('editMissionId').value;
+            const points = parseInt(document.getElementById('editMissionPoints').value) || 3;
+            const frequency = document.getElementById('editMissionFrequency').value;
+            const isSideMission = document.getElementById('editIsSideMission').checked;
+            const dueDateInput = document.getElementById('editMissionDueDate').value;
+            const dueDate = dueDateInput ? new Date(dueDateInput + 'T23:59:59') : null;
+            
+            try {
+                await updateDoc(doc(db, 'missions', id), {
+                    points,
+                    frequency,
+                    isSideMission,
+                    dueDate: dueDate ? Timestamp.fromDate(dueDate) : null,
+                    status: 'active',
+                    isActive: true,
+                    approvedBy: currentUser.uid,
+                    approvedAt: serverTimestamp()
+                });
+                
+                closeModal('editMissionModal');
+                alert('Mission approved!');
+            } catch (e) {
+                console.error(e);
+                alert('Failed to approve mission');
+            }
+        };
 
         window.addFamilyMember = async () => {
             const email = document.getElementById('memberEmail').value.trim().toLowerCase();
@@ -1188,7 +1500,16 @@
             document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
             document.querySelectorAll('.tab-content').forEach(t => t.classList.add('hidden'));
             
-            const tabs = { missions: 'missionsTab', chores: 'choresTab', tasks: 'tasksTab', approvals: 'approvalsTabContent', settings: 'settingsTab' };
+            const tabs = { 
+                missions: 'missionsTab', 
+                queue: 'queueTab', 
+                approvals: 'approvalsTabContent', 
+                completed: 'completedTab',
+                dashboard: 'dashboardTab',
+                settings: 'settingsTab',
+                chores: 'choresTab', 
+                tasks: 'tasksTab'
+            };
             document.querySelector(`.nav-tab[onclick="switchTab('${tab}')"]`).classList.add('active');
             document.getElementById(tabs[tab]).classList.remove('hidden');
         };
@@ -1211,7 +1532,23 @@
             el.classList.add('selected');
         };
 
-        window.showModal = (id) => document.getElementById(id).classList.add('active');
+        window.showModal = (id) => {
+            document.getElementById(id).classList.add('active');
+            
+            // Special handling for Add Mission modal
+            if (id === 'addMissionModal') {
+                const isParent = currentMember && currentMember.role === 'parent';
+                
+                // For kids: hide points, side mission, frequency, and assignee
+                document.getElementById('missionPointsGroup').style.display = isParent ? 'block' : 'none';
+                document.getElementById('missionSideMissionGroup').style.display = isParent ? 'block' : 'none';
+                document.getElementById('missionFrequencyGroup').style.display = isParent ? 'block' : 'none';
+                document.getElementById('missionAssigneeGroup').style.display = isParent ? 'block' : 'none';
+                
+                // Update modal title
+                document.getElementById('addMissionModalTitle').textContent = isParent ? 'Add Mission' : 'Request Mission';
+            }
+        };
         window.closeModal = (id) => document.getElementById(id).classList.remove('active');
 
         function showScreen(s) {
