@@ -1082,8 +1082,13 @@
             // Get mission requests (kids requesting new missions)
             const pendingRequests = missions.filter(m => m.status === 'pending_approval');
             
-            // Get active assigned missions
-            const activeMissions = missions.filter(m => m.status === 'active' && m.isActive);
+            // Get active assigned missions (but exclude ones with pending submissions)
+            const missionIdsWithPendingSubmissions = pendingSubmissions.map(s => s.choreId);
+            const activeMissions = missions.filter(m => 
+                m.status === 'active' && 
+                m.isActive === true &&
+                !missionIdsWithPendingSubmissions.includes(m.id) // Don't show if already submitted for approval
+            );
             
             if (pendingSubmissions.length === 0 && pendingTasks.length === 0 && pendingRequests.length === 0 && activeMissions.length === 0) {
                 list.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📋</div><p>Nothing in queue</p></div>';
