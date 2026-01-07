@@ -855,7 +855,10 @@
             
             if (currentMember?.role === 'parent') {
                 const pc = submissions.filter(s => s.status === 'pending').length + tasks.filter(t => t.status === 'submitted').length;
-                document.getElementById('pendingCount').textContent = pc;
+                const pendingCountEl = document.getElementById('pendingCount');
+                if (pendingCountEl) {
+                    pendingCountEl.textContent = pc;
+                }
             }
         }
 
