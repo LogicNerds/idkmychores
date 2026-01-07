@@ -746,11 +746,25 @@
             }));
             
             unsubAll.push(onSnapshot(query(collection(db, 'missions'), where('familyId', '==', currentFamily.id)), s => {
-                missions = []; s.forEach(d => missions.push({ id: d.id, ...d.data() })); updateMissions();
+                missions = []; 
+                s.forEach(d => missions.push({ id: d.id, ...d.data() })); 
+                updateMissions();
+                if (currentMember && currentMember.role === 'parent') {
+                    updateQueue(); // Update when missions change (new requests, etc.)
+                    updateDashboard();
+                }
             }));
             
             unsubAll.push(onSnapshot(query(collection(db, 'choreSubmissions'), where('familyId', '==', currentFamily.id)), s => {
-                submissions = []; s.forEach(d => submissions.push({ id: d.id, ...d.data() })); updateApprovals(); updateStats();
+                submissions = []; 
+                s.forEach(d => submissions.push({ id: d.id, ...d.data() })); 
+                updateMissions(); // Filter out completed missions
+                updateCompleted(); // Update completed tab
+                updateStats(); // Update stats
+                if (currentMember && currentMember.role === 'parent') {
+                    updateQueue(); // Update parent queue
+                    updateDashboard(); // Update parent dashboard
+                }
             }));
             
             unsubAll.push(onSnapshot(query(collection(db, 'pointsLedger'), where('familyId', '==', currentFamily.id)), s => {
@@ -878,43 +892,6 @@
                     </div>
                 `;
             }).join('');
-        }
-
-        function updateApprovals() {
-            const list = document.getElementById('approvalsList');
-            const ps = submissions.filter(s => s.status === 'pending');
-            const pt = tasks.filter(t => t.status === 'submitted');
-            if (ps.length + pt.length === 0) {
-                list.innerHTML = '<div class="empty-state"><div class="empty-state-icon">✅</div><p>All caught up!</p></div>';
-                return;
-            }
-            let html = '';
-            ps.forEach(s => {
-                const c = missions.find(x => x.id === s.choreId) || chores.find(x => x.id === s.choreId);
-                const m = familyMembers.find(x => x.userId === s.userId);
-                html += `
-                    <div class="card pending" onclick="showReview('${s.id}', 'chore')">
-                        <div class="card-header">
-                            <div class="card-title">${c?.isSideMission ? '⭐' : '🧹'} ${c?.name || 'Unknown'}</div>
-                            <span class="card-badge points">${c?.points || 0} pts</span>
-                        </div>
-                        <div class="card-body"><p><strong>By:</strong> ${m?.displayName || 'Unknown'}</p>${s.notes ? `<p>${s.notes}</p>` : ''}</div>
-                    </div>
-                `;
-            });
-            pt.forEach(t => {
-                const m = familyMembers.find(x => x.userId === t.submittedBy);
-                html += `
-                    <div class="card pending" onclick="showReview('${t.id}', 'task')">
-                        <div class="card-header">
-                            <div class="card-title">📋 ${t.title}</div>
-                            <span class="card-badge points">${t.points} pts</span>
-                        </div>
-                        <div class="card-body"><p><strong>By:</strong> ${m?.displayName || 'Unknown'}</p></div>
-                    </div>
-                `;
-            });
-            list.innerHTML = html;
         }
 
         function updateMembers() {
