@@ -152,6 +152,12 @@
         </div>
 
         <div class="main-content">
+            <div id="noFamilyState" class="hidden" style="text-align: center; padding: 60px 20px;">
+                <h2 style="color: #333; margin-bottom: 20px;">👋 Welcome to IDK Chores!</h2>
+                <p style="color: #666; margin-bottom: 30px; line-height: 1.6;">Get started by creating your family account to track chores, earn points, and build streaks together.</p>
+                <button class="action-btn" onclick="showModal('createFamilyModal')" style="max-width: 300px;">🏠 Create Your Family</button>
+            </div>
+
             <div class="stats-grid">
                 <div class="stat-card">
                     <div class="stat-value" id="todayPoints">0</div>
@@ -228,6 +234,21 @@
                         <p><strong>This Month:</strong> <span id="monthPoints">0</span></p>
                     </div>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="createFamilyModal" class="modal">
+        <div class="modal-content">
+            <h2>🏠 Create Your Family</h2>
+            <p style="color: #666; margin-bottom: 20px;">Set up your family account to start tracking chores and earning points together.</p>
+            <div class="form-group">
+                <label>Family Name</label>
+                <input type="text" id="createFamilyNameInput" placeholder="The Smith Family">
+            </div>
+            <div class="modal-buttons">
+                <button class="modal-btn secondary" onclick="closeModal('createFamilyModal')">Cancel</button>
+                <button class="modal-btn primary" onclick="createFamilyFromModal()">Create Family</button>
             </div>
         </div>
     </div>
@@ -528,7 +549,8 @@
                         await loadMember(); showScreen('main'); loadAll(); return;
                     }
                 }
-                showScreen('setup');
+                showScreen('main');
+                updateUI(); // Show no family state
             } catch (e) { console.error(e); alert('Error loading family'); }
         }
 
@@ -554,6 +576,25 @@
                 await checkFamilyStatus();
             } catch (e) { console.error(e); alert('Failed to create family'); }
         };
+
+        window.createFamilyFromModal = async () => {
+            const name = document.getElementById('createFamilyNameInput').value.trim();
+            if (!name) return alert('Enter family name');
+            try {
+                const fr = await addDoc(collection(db, 'families'), {
+                    ownerId: currentUser.uid, familyName: name, createdAt: serverTimestamp(),
+                    settings: { streaksEnabled: true, goalsEnabled: false, kidsCanCreateTasks: true, pointsSet: [1,2,3,5,8,13] }
+                });
+                await addDoc(collection(db, 'familyMembers'), {
+                    familyId: fr.id, userId: currentUser.uid, email: currentUser.email,
+                    displayName: currentUser.displayName || 'Parent', role: 'parent', status: 'active',
+                    invitedAt: serverTimestamp(), joinedAt: serverTimestamp(), settings: { streaksEnabled: true }
+                });
+                closeModal('createFamilyModal');
+                await checkFamilyStatus();
+            } catch (e) { console.error(e); alert('Failed to create family'); }
+        };
+
 
         function loadAll() {
             unsubAll.forEach(u => u()); unsubAll = [];
@@ -583,6 +624,21 @@
         }
 
         function updateUI() {
+            // Handle no family state
+            if (!currentFamily) {
+                document.getElementById('noFamilyState').classList.remove('hidden');
+                document.querySelectorAll('.stats-grid, .nav-tabs, #choresTab, #tasksTab, #approvalsTabContent, #settingsTab').forEach(el => {
+                    if (el) el.style.display = 'none';
+                });
+                return;
+            }
+            
+            // Hide no family state, show app content
+            document.getElementById('noFamilyState').classList.add('hidden');
+            document.querySelectorAll('.stats-grid, .nav-tabs').forEach(el => {
+                if (el) el.style.display = '';
+            });
+            
             if (!currentMember) return;
             const isParent = currentMember.role === 'parent';
             document.getElementById('parentSettings').style.display = isParent ? 'block' : 'none';
