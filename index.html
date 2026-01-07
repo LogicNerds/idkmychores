@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>IDK Chores</title>
+    <title>IDK My Week</title>
     <style>
         :root {
             --primary-start: #2c5f7a;
@@ -32,7 +32,7 @@
         .main-content { padding: 20px 20px 80px 20px; }
         .stats-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; margin-bottom: 25px; }
         .stat-card { background: linear-gradient(135deg, var(--balance-start) 0%, var(--balance-end) 100%); color: white; padding: 20px; border-radius: 16px; text-align: center; }
-        .stat-card.alt { background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); }
+        .stat-card.alt { background: linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-secondary) 100%); }
         .stat-value { font-size: 2em; font-weight: 700; margin-bottom: 5px; }
         .stat-label { font-size: 0.85em; opacity: 0.9; }
         .nav-tabs { display: flex; gap: 10px; margin-bottom: 20px; overflow-x: auto; }
@@ -46,6 +46,9 @@
         .card-title { font-size: 1.2em; font-weight: 600; color: #333; display: flex; align-items: center; gap: 8px; }
         .card-badge { background: var(--accent-primary); color: white; padding: 4px 12px; border-radius: 12px; font-size: 0.85em; font-weight: 600; }
         .card-badge.points { background: #f59e0b; }
+        .card-badge.side-mission { background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%); animation: shimmer 2s infinite; }
+        @keyframes shimmer { 0%, 100% { opacity: 1; } 50% { opacity: 0.8; } }
+        .card-badge.points.side-mission-points { background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%); color: white; font-weight: 700; }
         .card-body { color: #666; font-size: 0.9em; line-height: 1.4; }
         .card-meta { display: flex; gap: 15px; margin-top: 10px; font-size: 0.85em; color: #999; }
         .card-actions { display: flex; gap: 10px; margin-top: 15px; }
@@ -114,8 +117,8 @@
 </head>
 <body>
     <div id="loginScreen" class="login-screen">
-        <h1>✅ IDK Chores</h1>
-        <p>Track chores, build streaks, earn points together as a family!</p>
+        <h1>📅 IDK My Week</h1>
+        <p>Complete missions, build streaks, earn points together as a family!</p>
         <button class="google-signin-btn" onclick="signInWithGoogle()">
             <svg class="google-icon" viewBox="0 0 24 24">
                 <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
@@ -143,7 +146,7 @@
         <div class="header">
             <div class="header-left">
                 <button class="theme-btn" onclick="showThemeModal()" title="Change Theme">🎨</button>
-                <span style="margin-left: 15px; font-size: 1.2em; font-weight: 600;">IDK Chores</span>
+                <span style="margin-left: 15px; font-size: 1.2em; font-weight: 600;">IDK My Week</span>
             </div>
             <div class="header-right">
                 <img id="userAvatar" class="user-avatar" src="" alt="User">
@@ -153,8 +156,8 @@
 
         <div class="main-content">
             <div id="noFamilyState" class="hidden" style="text-align: center; padding: 60px 20px;">
-                <h2 style="color: #333; margin-bottom: 20px;">👋 Welcome to IDK Chores!</h2>
-                <p style="color: #666; margin-bottom: 30px; line-height: 1.6;">Get started by creating your family account to track chores, earn points, and build streaks together.</p>
+                <h2 style="color: #333; margin-bottom: 20px;">👋 Welcome to IDK My Week!</h2>
+                <p style="color: #666; margin-bottom: 30px; line-height: 1.6;">Get started by creating your family account to complete missions, earn points, and build streaks together.</p>
                 <button class="action-btn" onclick="showModal('createFamilyModal')" style="max-width: 300px;">🏠 Create Your Family</button>
             </div>
 
@@ -178,20 +181,22 @@
             </div>
 
             <div class="nav-tabs">
-                <div class="nav-tab active" onclick="switchTab('chores')">Chores</div>
-                <div class="nav-tab" onclick="switchTab('tasks')">Tasks</div>
+                <div class="nav-tab active" onclick="switchTab('missions')">Missions</div>
                 <div class="nav-tab" id="approvalsTab" onclick="switchTab('approvals')" style="display: none;">Approvals</div>
                 <div class="nav-tab" onclick="switchTab('settings')">Settings</div>
             </div>
 
-            <div id="choresTab" class="tab-content">
-                <button class="add-btn" onclick="showModal('addChoreModal')" id="addChoreBtn">+ Add Chore</button>
-                <div id="choresList"></div>
+            <div id="missionsTab" class="tab-content">
+                <button class="add-btn" onclick="showModal('addMissionModal')" id="addMissionBtn">+ Add Mission</button>
+                <div id="missionsList"></div>
             </div>
 
             <div id="tasksTab" class="tab-content hidden">
-                <button class="add-btn" onclick="showModal('addTaskModal')" id="addTaskBtn">+ Add Task</button>
-                <div id="tasksList"></div>
+                <!-- Keeping for backward compatibility during transition -->
+            </div>
+
+            <div id="choresTab" class="tab-content hidden">
+                <!-- Keeping for backward compatibility during transition -->
             </div>
 
             <div id="approvalsTabContent" class="tab-content hidden">
@@ -249,6 +254,60 @@
             <div class="modal-buttons">
                 <button class="modal-btn secondary" onclick="closeModal('createFamilyModal')">Cancel</button>
                 <button class="modal-btn primary" onclick="createFamilyFromModal()">Create Family</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="addMissionModal" class="modal">
+        <div class="modal-content">
+            <h2>Add Mission</h2>
+            <div class="form-group">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <input type="checkbox" id="isSideMission" style="width: auto; cursor: pointer;">
+                    <label for="isSideMission" style="margin: 0; cursor: pointer;">⭐ Side Mission (Extra Credit)</label>
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Mission Name</label>
+                <input type="text" id="missionName" placeholder="Take out trash">
+            </div>
+            <div class="form-group">
+                <label>Description</label>
+                <textarea id="missionDescription" placeholder="What needs to be done?"></textarea>
+            </div>
+            <div class="form-group">
+                <label>Points Value</label>
+                <div class="points-picker">
+                    <button type="button" class="points-btn" onclick="selectMissionPoints(1, this)">1</button>
+                    <button type="button" class="points-btn" onclick="selectMissionPoints(2, this)">2</button>
+                    <button type="button" class="points-btn selected" onclick="selectMissionPoints(3, this)">3</button>
+                    <button type="button" class="points-btn" onclick="selectMissionPoints(5, this)">5</button>
+                    <button type="button" class="points-btn" onclick="selectMissionPoints(8, this)">8</button>
+                    <button type="button" class="points-btn" onclick="selectMissionPoints(13, this)">13</button>
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Frequency</label>
+                <select id="missionFrequency">
+                    <option value="daily">Daily</option>
+                    <option value="weekly">Weekly</option>
+                    <option value="asneeded">As Needed</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Assign To</label>
+                <select id="missionAssignee" multiple style="height: 80px;">
+                    <option value="">Unassigned (Anyone can do)</option>
+                </select>
+                <small style="color: #999; font-size: 0.85em;">Hold Ctrl/Cmd to select multiple</small>
+            </div>
+            <div class="form-group">
+                <label>Due Date (Optional)</label>
+                <input type="date" id="missionDueDate">
+            </div>
+            <div class="modal-buttons">
+                <button class="modal-btn secondary" onclick="closeModal('addMissionModal')">Cancel</button>
+                <button class="modal-btn primary" onclick="addMission()">Add Mission</button>
             </div>
         </div>
     </div>
@@ -374,6 +433,21 @@
         </div>
     </div>
 
+    <div id="completeMissionModal" class="modal">
+        <div class="modal-content">
+            <h2>Complete Mission</h2>
+            <div id="completeMissionInfo"></div>
+            <div class="form-group">
+                <label>Notes (Optional)</label>
+                <textarea id="missionNotes" placeholder="Any notes?"></textarea>
+            </div>
+            <div class="modal-buttons">
+                <button class="modal-btn secondary" onclick="closeModal('completeMissionModal')">Cancel</button>
+                <button class="modal-btn primary" onclick="submitMissionCompletion()">Submit for Approval</button>
+            </div>
+        </div>
+    </div>
+
     <div id="reviewModal" class="modal">
         <div class="modal-content">
             <h2>Review Submission</h2>
@@ -477,7 +551,7 @@
         <button class="disclaimer-close" onclick="closeDisclaimer()">×</button>
         <div class="disclaimer-content">
             <h3>Disclaimer</h3>
-            <p>IDK Chores is provided for personal family organization purposes only. Parents are solely responsible for age-appropriate chores and supervision.</p>
+            <p>IDK My Week is provided for personal family organization purposes only. Parents are solely responsible for age-appropriate chores and supervision.</p>
             <p>Logic Nerds assumes no liability for family dynamics or any consequences arising from chore assignments. This software is provided "as is" without warranty.</p>
         </div>
     </div>
@@ -505,8 +579,8 @@
         const db = getFirestore(app);
 
         let currentUser = null, currentFamily = null, currentMember = null;
-        let familyMembers = [], chores = [], tasks = [], submissions = [], pointsHistory = [];
-        let selectedPoints = 3, selectedTaskPoints = 3, selectedChore = null, selectedSubmission = null;
+        let familyMembers = [], chores = [], tasks = [], missions = [], submissions = [], pointsHistory = [];
+        let selectedPoints = 3, selectedTaskPoints = 3, selectedMissionPoints = 3, selectedChore = null, selectedSubmission = null;
         let unsubAll = [];
 
         // Auth functions
@@ -627,6 +701,10 @@
                 tasks = []; s.forEach(d => tasks.push({ id: d.id, ...d.data() })); updateTasks();
             }));
             
+            unsubAll.push(onSnapshot(query(collection(db, 'missions'), where('familyId', '==', currentFamily.id)), s => {
+                missions = []; s.forEach(d => missions.push({ id: d.id, ...d.data() })); updateMissions();
+            }));
+            
             unsubAll.push(onSnapshot(query(collection(db, 'choreSubmissions'), where('familyId', '==', currentFamily.id)), s => {
                 submissions = []; s.forEach(d => submissions.push({ id: d.id, ...d.data() })); updateApprovals(); updateStats();
             }));
@@ -658,6 +736,8 @@
             const isParent = currentMember.role === 'parent';
             document.getElementById('parentSettings').style.display = isParent ? 'block' : 'none';
             document.getElementById('addMemberBtn').style.display = isParent ? 'block' : 'none';
+            const addMissionBtn = document.getElementById('addMissionBtn');
+            if (addMissionBtn) addMissionBtn.style.display = (isParent || currentFamily.settings.kidsCanCreateTasks) ? 'block' : 'none';
             document.getElementById('addChoreBtn').style.display = isParent ? 'block' : 'none';
             document.getElementById('approvalsTab').style.display = isParent ? 'block' : 'none';
             document.getElementById('pendingCard').style.display = isParent ? 'block' : 'none';
@@ -792,6 +872,8 @@
                 am.map(m => `<option value="${m.userId}">${m.displayName}</option>`).join('');
             document.getElementById('choreAssignee').innerHTML = '<option value="">Unassigned (Anyone can do)</option>' + 
                 am.map(m => `<option value="${m.userId}">${m.displayName}</option>`).join('');
+            document.getElementById('missionAssignee').innerHTML = '<option value="">Unassigned (Anyone can do)</option>' + 
+                am.map(m => `<option value="${m.userId}">${m.displayName}</option>`).join('');
         }
 
         window.addChore = async () => {
@@ -849,6 +931,72 @@
             } catch (e) { console.error(e); alert('Failed to add task'); }
         };
 
+        window.addMission = async () => {
+            const name = document.getElementById('missionName').value.trim();
+            if (!name) return alert('Enter mission name');
+            
+            const isSideMission = document.getElementById('isSideMission').checked;
+            const assigneeSelect = document.getElementById('missionAssignee');
+            const selectedOptions = Array.from(assigneeSelect.selectedOptions);
+            const assignedTo = selectedOptions.map(opt => opt.value).filter(val => val !== '');
+            const dueDateInput = document.getElementById('missionDueDate').value;
+            const dueDate = dueDateInput ? new Date(dueDateInput + 'T23:59:59') : null;
+            
+            try {
+                await addDoc(collection(db, 'missions'), {
+                    familyId: currentFamily.id,
+                    name,
+                    description: document.getElementById('missionDescription').value.trim(),
+                    points: selectedMissionPoints,
+                    frequency: document.getElementById('missionFrequency').value,
+                    assignedTo: assignedTo,
+                    dueDate: dueDate ? Timestamp.fromDate(dueDate) : null,
+                    isSideMission: isSideMission,
+                    createdBy: currentUser.uid,
+                    createdAt: serverTimestamp(),
+                    isActive: true
+                });
+                closeModal('addMissionModal');
+                document.getElementById('missionName').value = '';
+                document.getElementById('missionDescription').value = '';
+                document.getElementById('missionDueDate').value = '';
+                document.getElementById('isSideMission').checked = false;
+                assigneeSelect.selectedIndex = 0;
+            } catch (e) { console.error(e); alert('Failed to add mission'); }
+        };
+
+        function updateMissions() {
+            const list = document.getElementById('missionsList');
+            const visibleMissions = missions.filter(m => m.isActive && 
+                (m.assignedTo.length === 0 || m.assignedTo.includes(currentUser.uid)));
+            
+            if (visibleMissions.length === 0) {
+                list.innerHTML = '<div class="empty-state"><div class="empty-state-icon">🎯</div><p>No missions yet</p></div>';
+                return;
+            }
+            
+            list.innerHTML = visibleMissions.map(m => {
+                const isOverdue = m.dueDate && new Date() > (m.dueDate.toDate ? m.dueDate.toDate() : new Date(m.dueDate));
+                const pointsClass = m.isSideMission ? 'side-mission-points' : 'points';
+                return `
+                    <div class="card" onclick="showCompleteMission('${m.id}')">
+                        <div class="card-header">
+                            <div class="card-title">
+                                ${m.name}
+                                ${m.isSideMission ? '<span class="card-badge side-mission">⭐ SIDE MISSION</span>' : ''}
+                            </div>
+                            <span class="card-badge ${pointsClass}">${m.points} pts</span>
+                        </div>
+                        <div class="card-body">
+                            ${m.description ? `<p>${m.description}</p>` : ''}
+                            ${m.dueDate ? `<p style="color: ${isOverdue ? '#dc2626' : '#666'}">Due: ${(m.dueDate.toDate ? m.dueDate.toDate() : new Date(m.dueDate)).toLocaleDateString()}${isOverdue ? ' ⚠️ OVERDUE' : ''}</p>` : ''}
+                            <p><strong>Frequency:</strong> ${m.frequency}</p>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
         window.addFamilyMember = async () => {
             const email = document.getElementById('memberEmail').value.trim().toLowerCase();
             const name = document.getElementById('memberName').value.trim();
@@ -864,6 +1012,38 @@
                 document.getElementById('memberEmail').value = ''; document.getElementById('memberName').value = '';
                 alert(`Invite sent to ${email}`);
             } catch (e) { console.error(e); alert('Failed to add member'); }
+        };
+
+        window.showCompleteMission = (id) => {
+            const mission = missions.find(m => m.id === id);
+            if (!mission) return;
+            document.getElementById('completeMissionInfo').innerHTML = `
+                <div class="card-body">
+                    <p><strong>Mission:</strong> ${mission.name}${mission.isSideMission ? ' ⭐' : ''}</p>
+                    <p><strong>Points:</strong> ${mission.points}</p>
+                </div>
+            `;
+            document.getElementById('missionNotes').value = '';
+            window.selectedMission = mission;
+            showModal('completeMissionModal');
+        };
+
+        window.submitMissionCompletion = async () => {
+            if (!window.selectedMission) return;
+            try {
+                await addDoc(collection(db, 'choreSubmissions'), {
+                    familyId: currentFamily.id,
+                    choreId: window.selectedMission.id,
+                    userId: currentUser.uid,
+                    submittedAt: serverTimestamp(),
+                    status: 'pending',
+                    notes: document.getElementById('missionNotes').value.trim(),
+                    isMission: true
+                });
+                closeModal('completeMissionModal');
+                window.selectedMission = null;
+                alert('Mission submitted for approval!');
+            } catch (e) { console.error(e); alert('Failed to submit'); }
         };
 
         window.showCompleteChore = (id) => {
@@ -959,24 +1139,28 @@
                         });
                     }
                 } else {
-                    const c = chores.find(x => x.id === selectedSubmission.choreId);
+                    // Check missions first, then chores (for backward compatibility)
+                    let item = missions.find(x => x.id === selectedSubmission.choreId);
+                    if (!item) item = chores.find(x => x.id === selectedSubmission.choreId);
+                    if (!item) return alert('Mission/Chore not found');
+                    
                     if (action === 'approve') {
-                        // Calculate point decay for overdue chores
-                        let finalPoints = c.points;
-                        if (c.dueDate) {
-                            const dueDate = c.dueDate.toDate ? c.dueDate.toDate() : new Date(c.dueDate);
+                        // Calculate point decay for overdue missions/chores
+                        let finalPoints = item.points;
+                        if (item.dueDate) {
+                            const dueDate = item.dueDate.toDate ? item.dueDate.toDate() : new Date(item.dueDate);
                             const submittedDate = selectedSubmission.submittedAt?.toDate ? selectedSubmission.submittedAt.toDate() : new Date();
                             const daysOverdue = Math.floor((submittedDate - dueDate) / (1000 * 60 * 60 * 24));
                             if (daysOverdue > 0) {
                                 const decayPercent = Math.min(daysOverdue * 10, 90); // Max 90% decay
-                                finalPoints = Math.max(Math.round(c.points * (1 - decayPercent / 100)), 1); // Min 1 point
+                                finalPoints = Math.max(Math.round(item.points * (1 - decayPercent / 100)), 1); // Min 1 point
                             }
                         }
                         
                         await addDoc(collection(db, 'pointsLedger'), {
                             familyId: currentFamily.id, userId: selectedSubmission.userId, points: finalPoints, source: 'chore',
                             sourceId: selectedSubmission.id, awardedBy: currentUser.uid, awardedAt: serverTimestamp(), 
-                            description: `Completed: ${c.name}${finalPoints < c.points ? ` (${c.points - finalPoints} pts deducted for late)` : ''}`
+                            description: `Completed: ${item.name}${item.isSideMission ? ' ⭐' : ''}${finalPoints < item.points ? ` (${item.points - finalPoints} pts deducted for late)` : ''}`
                         });
                         await updateDoc(doc(db, 'choreSubmissions', selectedSubmission.id), {
                             status: 'approved', reviewedBy: currentUser.uid, reviewedAt: serverTimestamp(), pointsAwarded: finalPoints
@@ -1004,9 +1188,15 @@
             document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
             document.querySelectorAll('.tab-content').forEach(t => t.classList.add('hidden'));
             
-            const tabs = { chores: 'choresTab', tasks: 'tasksTab', approvals: 'approvalsTabContent', settings: 'settingsTab' };
+            const tabs = { missions: 'missionsTab', chores: 'choresTab', tasks: 'tasksTab', approvals: 'approvalsTabContent', settings: 'settingsTab' };
             document.querySelector(`.nav-tab[onclick="switchTab('${tab}')"]`).classList.add('active');
             document.getElementById(tabs[tab]).classList.remove('hidden');
+        };
+
+        window.selectMissionPoints = (p, el) => {
+            selectedMissionPoints = p;
+            document.querySelectorAll('#addMissionModal .points-btn').forEach(b => b.classList.remove('selected'));
+            el.classList.add('selected');
         };
 
         window.selectPoints = (p, el) => {
@@ -1085,13 +1275,13 @@
             root.style.setProperty('--accent-bg', theme.accentBg);
             root.style.setProperty('--balance-start', theme.balanceStart);
             root.style.setProperty('--balance-end', theme.balanceEnd);
-            localStorage.setItem('idkChoresTheme', themeName);
+            localStorage.setItem('idkMyWeekTheme', themeName);
             closeModal('themeModal');
         };
 
         // Load saved theme
         window.addEventListener('DOMContentLoaded', () => {
-            const savedTheme = localStorage.getItem('idkChoresTheme') || 'default';
+            const savedTheme = localStorage.getItem('idkMyWeekTheme') || 'default';
             if (savedTheme && themes[savedTheme]) setTheme(savedTheme);
         });
     </script>
