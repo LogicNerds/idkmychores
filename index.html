@@ -1098,8 +1098,26 @@
                     s.choreId === m.id && s.status === 'pending'
                 );
                 
+                // DEBUG LOGGING
+                if (hasPendingSubmission) {
+                    console.log('🔍 DEBUG: Mission should be filtered out:', {
+                        missionId: m.id,
+                        missionName: m.name,
+                        hasPendingSubmission: true,
+                        matchingSubmissions: submissions.filter(s => s.choreId === m.id && s.status === 'pending')
+                    });
+                }
+                
                 // Don't show if it has a pending submission
                 return !hasPendingSubmission;
+            });
+            
+            console.log('📊 DEBUG: updateQueue() called', {
+                totalMissions: missions.length,
+                activeMissionsCount: missions.filter(m => m.status === 'active' && m.isActive === true).length,
+                filteredActiveMissions: activeMissions.length,
+                pendingSubmissionsCount: pendingSubmissions.length,
+                submissionsArray: submissions.map(s => ({ id: s.id, choreId: s.choreId, status: s.status }))
             });
             
             if (pendingSubmissions.length === 0 && pendingTasks.length === 0 && pendingRequests.length === 0 && activeMissions.length === 0) {
@@ -1185,10 +1203,7 @@
                                     ${m.name}
                                     ${m.isSideMission ? '<span class="card-badge side-mission">⭐ SIDE MISSION</span>' : ''}
                                 </div>
-                                <div style="display: flex; gap: 10px; align-items: center;">
-                                    <span class="card-badge ${m.isSideMission ? 'side-mission-points' : 'points'}">${m.points} pts</span>
-                                    <button class="remove-btn" onclick="event.stopPropagation(); archiveMission('${m.id}')">Archive</button>
-                                </div>
+                                <span class="card-badge ${m.isSideMission ? 'side-mission-points' : 'points'}">${m.points} pts</span>
                             </div>
                             <div class="card-body">
                                 ${m.description ? `<p>${m.description}</p>` : ''}
@@ -1414,6 +1429,11 @@
                 const pointsToDelete = pointsHistory.filter(p => p.familyId === currentFamily.id);
                 for (const point of pointsToDelete) {
                     await deleteDoc(doc(db, 'pointsLedger', point.id));
+                }
+                
+                // Force update dashboard to reflect cleared data
+                if (currentMember && currentMember.role === 'parent') {
+                    updateDashboard();
                 }
                 
                 alert('✅ All family data has been reset! Starting fresh.');
