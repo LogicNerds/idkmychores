@@ -114,11 +114,9 @@
         .disclaimer-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 1000; }
         .disclaimer-overlay.active { display: block; }
         @media (max-width: 768px) { 
-            .stats-grid { grid-template-columns: repeat(2, 1fr); } 
             .nav-tabs { grid-template-columns: repeat(2, 1fr); }
         }
         @media (max-width: 480px) { 
-            .stats-grid { grid-template-columns: 1fr; } 
             .nav-tabs { grid-template-columns: 1fr; }
         }
     </style>
@@ -191,7 +189,6 @@
             <div class="nav-tabs">
                 <div class="nav-tab active" onclick="switchTab('missions')">My Missions</div>
                 <div class="nav-tab" id="queueTab" onclick="switchTab('queue')" style="display: none;">Queue</div>
-                <div class="nav-tab" id="approvalsTab" onclick="switchTab('approvals')" style="display: none;">Approvals</div>
                 <div class="nav-tab" id="completedTab" onclick="switchTab('completed')" style="display: none;">Completed</div>
                 <div class="nav-tab" id="dashboardTab" onclick="switchTab('dashboard')" style="display: none;">Family Dashboard</div>
                 <div class="nav-tab" onclick="switchTab('settings')">Settings</div>
@@ -221,10 +218,6 @@
 
             <div id="choresTab" class="tab-content hidden">
                 <!-- Keeping for backward compatibility during transition -->
-            </div>
-
-            <div id="approvalsTabContent" class="tab-content hidden">
-                <div id="approvalsList"></div>
             </div>
 
             <div id="settingsTab" class="tab-content hidden">
@@ -310,14 +303,6 @@
                     <button type="button" class="points-btn" onclick="selectMissionPoints(13, this)">13</button>
                 </div>
             </div>
-            <div class="form-group" id="missionFrequencyGroup">
-                <label>Frequency</label>
-                <select id="missionFrequency">
-                    <option value="daily">Daily</option>
-                    <option value="weekly">Weekly</option>
-                    <option value="asneeded">As Needed</option>
-                </select>
-            </div>
             <div class="form-group" id="missionAssigneeGroup">
                 <label>Assign To</label>
                 <select id="missionAssignee" multiple style="height: 80px;">
@@ -357,14 +342,6 @@
             <div class="form-group">
                 <label>Points Value</label>
                 <input type="number" id="editMissionPoints" value="3" min="1" max="100">
-            </div>
-            <div class="form-group">
-                <label>Frequency</label>
-                <select id="editMissionFrequency">
-                    <option value="daily">Daily</option>
-                    <option value="weekly">Weekly</option>
-                    <option value="asneeded">As Needed</option>
-                </select>
             </div>
             <div class="form-group">
                 <label>Due Date</label>
@@ -803,10 +780,10 @@
             const isParent = currentMember.role === 'parent';
             
             // Show/hide parent-only tabs
-            document.getElementById('queueTab').style.display = isParent ? 'block' : 'none';
-            document.getElementById('approvalsTab').style.display = isParent ? 'block' : 'none';
-            document.getElementById('completedTab').style.display = isParent ? 'block' : 'none';
-            document.getElementById('dashboardTab').style.display = isParent ? 'block' : 'none';
+            document.getElementById('queueTab').style.display = isParent ? '' : 'none';
+            document.getElementById('approvalsTab').style.display = 'none'; // Removing approvals tab - consolidated into queue
+            document.getElementById('completedTab').style.display = ''; // Show for everyone
+            document.getElementById('dashboardTab').style.display = isParent ? '' : 'none';
             
             // Show/hide parent-only elements
             document.getElementById('parentSettings').style.display = isParent ? 'block' : 'none';
@@ -830,11 +807,12 @@
                 document.getElementById('pendingMissions').textContent = mySubmissions + myTasks + myPendingRequests;
             }
             
-            // Update queue, approvals, completed, and dashboard
+            // Update completed list for everyone
+            updateCompleted();
+            
+            // Update queue and dashboard for parents only
             if (isParent) {
                 updateQueue();
-                updateApprovals();
-                updateCompleted();
                 updateDashboard();
             }
             
@@ -1047,7 +1025,6 @@
                         name,
                         description: document.getElementById('missionDescription').value.trim(),
                         points: selectedMissionPoints,
-                        frequency: document.getElementById('missionFrequency').value,
                         assignedTo: assignedTo,
                         dueDate: dueDate ? Timestamp.fromDate(dueDate) : null,
                         isSideMission: isSideMission,
@@ -1063,7 +1040,6 @@
                         name,
                         description: document.getElementById('missionDescription').value.trim(),
                         points: 0, // Parent will set
-                        frequency: 'asneeded',
                         assignedTo: [currentUser.uid], // Auto-assign to self
                         dueDate: dueDate ? Timestamp.fromDate(dueDate) : null,
                         isSideMission: false,
@@ -1086,10 +1062,17 @@
 
         function updateMissions() {
             const list = document.getElementById('missionsList');
+            
+            // Get user's approved submissions to filter out completed missions
+            const completedMissionIds = submissions
+                .filter(s => s.status === 'approved' && s.userId === currentUser.uid && s.isMission)
+                .map(s => s.choreId);
+            
             const visibleMissions = missions.filter(m => 
                 m.isActive && 
                 m.status === 'active' &&
-                (m.assignedTo.length === 0 || m.assignedTo.includes(currentUser.uid))
+                (m.assignedTo.length === 0 || m.assignedTo.includes(currentUser.uid)) &&
+                !completedMissionIds.includes(m.id) // Exclude completed missions
             );
             
             if (visibleMissions.length === 0) {
@@ -1112,7 +1095,6 @@
                         <div class="card-body">
                             ${m.description ? `<p>${m.description}</p>` : ''}
                             ${m.dueDate ? `<p style="color: ${isOverdue ? '#dc2626' : '#666'}">Due: ${(m.dueDate.toDate ? m.dueDate.toDate() : new Date(m.dueDate)).toLocaleDateString()}${isOverdue ? ' ⚠️ OVERDUE' : ''}</p>` : ''}
-                            <p><strong>Frequency:</strong> ${m.frequency}</p>
                         </div>
                     </div>
                 `;
@@ -1121,47 +1103,121 @@
 
         function updateQueue() {
             const list = document.getElementById('queueList');
-            // Show active missions + pending mission requests from kids
-            const queueMissions = missions.filter(m => 
-                (m.status === 'active' && m.isActive) || m.status === 'pending_approval'
-            );
             
-            if (queueMissions.length === 0) {
-                list.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📋</div><p>No missions in queue</p></div>';
+            // Get pending approvals (completed missions awaiting review)
+            const pendingSubmissions = submissions.filter(s => s.status === 'pending');
+            const pendingTasks = tasks.filter(t => t.status === 'submitted');
+            
+            // Get mission requests (kids requesting new missions)
+            const pendingRequests = missions.filter(m => m.status === 'pending_approval');
+            
+            // Get active assigned missions
+            const activeMissions = missions.filter(m => m.status === 'active' && m.isActive);
+            
+            if (pendingSubmissions.length === 0 && pendingTasks.length === 0 && pendingRequests.length === 0 && activeMissions.length === 0) {
+                list.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📋</div><p>Nothing in queue</p></div>';
                 return;
             }
             
-            list.innerHTML = queueMissions.map(m => {
-                const isPendingApproval = m.status === 'pending_approval';
-                const requester = isPendingApproval ? familyMembers.find(fm => fm.userId === m.requestedBy) : null;
-                const assignees = m.assignedTo.map(id => familyMembers.find(fm => fm.userId === id)?.displayName || 'Unknown').join(', ') || 'Unassigned';
-                const isOverdue = m.dueDate && new Date() > (m.dueDate.toDate ? m.dueDate.toDate() : new Date(m.dueDate));
+            let html = '';
+            
+            // SECTION 1: Pending Approvals
+            if (pendingSubmissions.length > 0 || pendingTasks.length > 0) {
+                html += '<h3 style="color: #333; margin: 20px 0 15px 0; font-size: 1.1em;">⏳ Pending Approvals</h3>';
                 
-                return `
-                    <div class="card" ${isPendingApproval ? `onclick="approveMissionRequest('${m.id}')"` : ''}>
-                        <div class="card-header">
-                            <div class="card-title">
-                                ${m.name}
-                                ${isPendingApproval ? '<span class="card-badge" style="background: #fbbf24;">⏳ PENDING APPROVAL</span>' : ''}
-                                ${m.isSideMission ? '<span class="card-badge side-mission">⭐ SIDE MISSION</span>' : ''}
+                pendingSubmissions.forEach(s => {
+                    const m = missions.find(x => x.id === s.choreId) || chores.find(x => x.id === s.choreId);
+                    const member = familyMembers.find(x => x.userId === s.userId);
+                    html += `
+                        <div class="card pending" onclick="showReview('${s.id}', 'chore')">
+                            <div class="card-header">
+                                <div class="card-title">${m?.isSideMission ? '⭐' : '🧹'} ${m?.name || 'Unknown'}</div>
+                                <span class="card-badge points">${m?.points || 0} pts</span>
                             </div>
-                            <span class="card-badge ${m.isSideMission ? 'side-mission-points' : 'points'}">${m.points} pts</span>
+                            <div class="card-body">
+                                <p><strong>By:</strong> ${member?.displayName || 'Unknown'}</p>
+                                ${s.notes ? `<p>${s.notes}</p>` : ''}
+                            </div>
                         </div>
-                        <div class="card-body">
-                            ${m.description ? `<p>${m.description}</p>` : ''}
-                            ${isPendingApproval ? `<p><strong>Requested by:</strong> ${requester?.displayName || 'Unknown'}</p>` : ''}
-                            <p><strong>Assigned to:</strong> ${assignees}</p>
-                            ${m.dueDate ? `<p style="color: ${isOverdue ? '#dc2626' : '#666'}">Due: ${(m.dueDate.toDate ? m.dueDate.toDate() : new Date(m.dueDate)).toLocaleDateString()}${isOverdue ? ' ⚠️ OVERDUE' : ''}</p>` : ''}
-                            <p><strong>Frequency:</strong> ${m.frequency}</p>
+                    `;
+                });
+                
+                pendingTasks.forEach(t => {
+                    const member = familyMembers.find(x => x.userId === t.submittedBy);
+                    html += `
+                        <div class="card pending" onclick="showReview('${t.id}', 'task')">
+                            <div class="card-header">
+                                <div class="card-title">📋 ${t.title}</div>
+                                <span class="card-badge points">${t.points} pts</span>
+                            </div>
+                            <div class="card-body">
+                                <p><strong>By:</strong> ${member?.displayName || 'Unknown'}</p>
+                            </div>
                         </div>
-                    </div>
-                `;
-            }).join('');
+                    `;
+                });
+            }
+            
+            // SECTION 2: Mission Requests from Kids
+            if (pendingRequests.length > 0) {
+                html += '<h3 style="color: #333; margin: 20px 0 15px 0; font-size: 1.1em;">📝 Mission Requests</h3>';
+                
+                pendingRequests.forEach(m => {
+                    const requester = familyMembers.find(fm => fm.userId === m.requestedBy);
+                    html += `
+                        <div class="card" onclick="approveMissionRequest('${m.id}')">
+                            <div class="card-header">
+                                <div class="card-title">
+                                    ${m.name}
+                                    <span class="card-badge" style="background: #fbbf24;">⏳ NEEDS APPROVAL</span>
+                                </div>
+                            </div>
+                            <div class="card-body">
+                                ${m.description ? `<p>${m.description}</p>` : ''}
+                                <p><strong>Requested by:</strong> ${requester?.displayName || 'Unknown'}</p>
+                                ${m.dueDate ? `<p><strong>Due:</strong> ${(m.dueDate.toDate ? m.dueDate.toDate() : new Date(m.dueDate)).toLocaleDateString()}</p>` : ''}
+                            </div>
+                        </div>
+                    `;
+                });
+            }
+            
+            // SECTION 3: Active Missions (assigned to kids)
+            if (activeMissions.length > 0) {
+                html += '<h3 style="color: #333; margin: 20px 0 15px 0; font-size: 1.1em;">🎯 Active Missions</h3>';
+                
+                activeMissions.forEach(m => {
+                    const assignees = m.assignedTo.map(id => familyMembers.find(fm => fm.userId === id)?.displayName || 'Unknown').join(', ') || 'Unassigned';
+                    const isOverdue = m.dueDate && new Date() > (m.dueDate.toDate ? m.dueDate.toDate() : new Date(m.dueDate));
+                    
+                    html += `
+                        <div class="card">
+                            <div class="card-header">
+                                <div class="card-title">
+                                    ${m.name}
+                                    ${m.isSideMission ? '<span class="card-badge side-mission">⭐ SIDE MISSION</span>' : ''}
+                                </div>
+                                <span class="card-badge ${m.isSideMission ? 'side-mission-points' : 'points'}">${m.points} pts</span>
+                            </div>
+                            <div class="card-body">
+                                ${m.description ? `<p>${m.description}</p>` : ''}
+                                <p><strong>Assigned to:</strong> ${assignees}</p>
+                                ${m.dueDate ? `<p style="color: ${isOverdue ? '#dc2626' : '#666'}">Due: ${(m.dueDate.toDate ? m.dueDate.toDate() : new Date(m.dueDate)).toLocaleDateString()}${isOverdue ? ' ⚠️ OVERDUE' : ''}</p>` : ''}
+                            </div>
+                        </div>
+                    `;
+                });
+            }
+            
+            list.innerHTML = html;
         }
 
         function updateCompleted() {
             const list = document.getElementById('completedList');
-            const completedItems = [
+            const isParent = currentMember && currentMember.role === 'parent';
+            
+            // Get completed items
+            let completedItems = [
                 ...submissions.filter(s => s.status === 'approved').map(s => ({
                     type: 'mission',
                     ...s,
@@ -1171,7 +1227,16 @@
                     type: 'task',
                     ...t
                 }))
-            ].sort((a, b) => {
+            ];
+            
+            // Kids only see their own completed items
+            if (!isParent) {
+                completedItems = completedItems.filter(item => 
+                    (item.userId === currentUser.uid) || (item.submittedBy === currentUser.uid)
+                );
+            }
+            
+            completedItems.sort((a, b) => {
                 const aTime = a.reviewedAt?.toMillis ? a.reviewedAt.toMillis() : 0;
                 const bTime = b.reviewedAt?.toMillis ? b.reviewedAt.toMillis() : 0;
                 return bTime - aTime;
@@ -1190,7 +1255,7 @@
                 return `
                     <div class="card" style="opacity: 0.7;">
                         <div class="card-header">
-                            <div class="card-title">${name}</div>
+                            <div class="card-title">${name}${item.mission?.isSideMission ? ' ⭐' : ''}</div>
                             <span class="card-badge points">${points} pts</span>
                         </div>
                         <div class="card-body">
@@ -1267,9 +1332,20 @@
         window.clearCompleted = async () => {
             if (!confirm('Clear all completed missions from the list? This cannot be undone.')) return;
             
+            const isParent = currentMember && currentMember.role === 'parent';
+            
             try {
-                const completedSubmissions = submissions.filter(s => s.status === 'approved');
-                const completedTasks = tasks.filter(t => t.status === 'approved');
+                let completedSubmissions, completedTasks;
+                
+                if (isParent) {
+                    // Parents clear all
+                    completedSubmissions = submissions.filter(s => s.status === 'approved');
+                    completedTasks = tasks.filter(t => t.status === 'approved');
+                } else {
+                    // Kids clear only their own
+                    completedSubmissions = submissions.filter(s => s.status === 'approved' && s.userId === currentUser.uid);
+                    completedTasks = tasks.filter(t => t.status === 'approved' && t.submittedBy === currentUser.uid);
+                }
                 
                 for (const sub of completedSubmissions) {
                     await deleteDoc(doc(db, 'choreSubmissions', sub.id));
@@ -1302,7 +1378,6 @@
         window.approveMissionEdit = async () => {
             const id = document.getElementById('editMissionId').value;
             const points = parseInt(document.getElementById('editMissionPoints').value) || 3;
-            const frequency = document.getElementById('editMissionFrequency').value;
             const isSideMission = document.getElementById('editIsSideMission').checked;
             const dueDateInput = document.getElementById('editMissionDueDate').value;
             const dueDate = dueDateInput ? new Date(dueDateInput + 'T23:59:59') : null;
@@ -1310,7 +1385,6 @@
             try {
                 await updateDoc(doc(db, 'missions', id), {
                     points,
-                    frequency,
                     isSideMission,
                     dueDate: dueDate ? Timestamp.fromDate(dueDate) : null,
                     status: 'active',
@@ -1471,10 +1545,14 @@
         window.showReview = (id, type) => {
             if (type === 'chore') {
                 selectedSubmission = { ...submissions.find(s => s.id === id), type: 'chore' };
-                const c = chores.find(x => x.id === selectedSubmission.choreId);
+                const c = missions.find(x => x.id === selectedSubmission.choreId) || chores.find(x => x.id === selectedSubmission.choreId);
                 const m = familyMembers.find(x => x.userId === selectedSubmission.userId);
                 document.getElementById('reviewInfo').innerHTML = `
-                    <div class="card-body"><p><strong>Chore:</strong> ${c?.name}</p><p><strong>By:</strong> ${m?.displayName}</p><p><strong>Points:</strong> ${c?.points}</p></div>
+                    <div class="card-body">
+                        <p><strong>Mission:</strong> ${c?.name || 'Unknown'}${c?.isSideMission ? ' ⭐' : ''}</p>
+                        <p><strong>By:</strong> ${m?.displayName || 'Unknown'}</p>
+                        <p><strong>Points:</strong> ${c?.points || 0}</p>
+                    </div>
                 `;
             } else {
                 const t = tasks.find(x => x.id === id);
@@ -1581,7 +1659,6 @@
             const tabs = { 
                 missions: 'missionsTab', 
                 queue: 'queueTabContent', 
-                approvals: 'approvalsTabContent', 
                 completed: 'completedTab',
                 dashboard: 'dashboardTabContent',
                 settings: 'settingsTab',
@@ -1617,10 +1694,9 @@
             if (id === 'addMissionModal') {
                 const isParent = currentMember && currentMember.role === 'parent';
                 
-                // For kids: hide points, side mission, frequency, and assignee
+                // For kids: hide points, side mission, and assignee
                 document.getElementById('missionPointsGroup').style.display = isParent ? 'block' : 'none';
                 document.getElementById('missionSideMissionGroup').style.display = isParent ? 'block' : 'none';
-                document.getElementById('missionFrequencyGroup').style.display = isParent ? 'block' : 'none';
                 document.getElementById('missionAssigneeGroup').style.display = isParent ? 'block' : 'none';
                 
                 // Update modal title
