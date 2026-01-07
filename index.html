@@ -189,7 +189,7 @@
             <div class="nav-tabs">
                 <div class="nav-tab active" onclick="switchTab('missions')">My Missions</div>
                 <div class="nav-tab" id="queueTab" onclick="switchTab('queue')" style="display: none;">Queue</div>
-                <div class="nav-tab" id="completedTab" onclick="switchTab('completed')" style="display: none;">Completed</div>
+                <div class="nav-tab" id="completedTabBtn" onclick="switchTab('completed')" style="display: none;">Completed</div>
                 <div class="nav-tab" id="dashboardTab" onclick="switchTab('dashboard')" style="display: none;">Family Dashboard</div>
                 <div class="nav-tab" onclick="switchTab('settings')">Settings</div>
             </div>
@@ -485,7 +485,7 @@
             </div>
             <div class="modal-buttons">
                 <button class="modal-btn secondary" onclick="closeModal('completeMissionModal')">Cancel</button>
-                <button class="modal-btn primary" onclick="submitMissionCompletion()">Submit for Approval</button>
+                <button class="modal-btn primary" id="completeMissionBtn" onclick="submitMissionCompletion()">Submit for Approval</button>
             </div>
         </div>
     </div>
@@ -781,8 +781,7 @@
             
             // Show/hide parent-only tabs
             document.getElementById('queueTab').style.display = isParent ? '' : 'none';
-            document.getElementById('approvalsTab').style.display = 'none'; // Removing approvals tab - consolidated into queue
-            document.getElementById('completedTab').style.display = ''; // Show for everyone
+            document.getElementById('completedTabBtn').style.display = ''; // Show for everyone
             document.getElementById('dashboardTab').style.display = isParent ? '' : 'none';
             
             // Show/hide parent-only elements
@@ -1063,16 +1062,16 @@
         function updateMissions() {
             const list = document.getElementById('missionsList');
             
-            // Get user's approved submissions to filter out completed missions
-            const completedMissionIds = submissions
-                .filter(s => s.status === 'approved' && s.userId === currentUser.uid && s.isMission)
+            // Get user's approved OR pending submissions to filter out completed/submitted missions
+            const completedOrPendingMissionIds = submissions
+                .filter(s => (s.status === 'approved' || s.status === 'pending') && s.userId === currentUser.uid && s.isMission)
                 .map(s => s.choreId);
             
             const visibleMissions = missions.filter(m => 
                 m.isActive && 
                 m.status === 'active' &&
                 (m.assignedTo.length === 0 || m.assignedTo.includes(currentUser.uid)) &&
-                !completedMissionIds.includes(m.id) // Exclude completed missions
+                !completedOrPendingMissionIds.includes(m.id) // Exclude completed/pending missions
             );
             
             if (visibleMissions.length === 0) {
@@ -1422,27 +1421,28 @@
             const mission = missions.find(m => m.id === id);
             if (!mission) return;
             
-            // Check if parent assigned to themselves only
             const isParent = currentMember && currentMember.role === 'parent';
             const isSelfAssigned = mission.assignedTo.length === 1 && mission.assignedTo[0] === currentUser.uid;
             
+            // Always show modal for everyone
+            document.getElementById('completeMissionInfo').innerHTML = `
+                <div class="card-body">
+                    <p><strong>Mission:</strong> ${mission.name}${mission.isSideMission ? ' ⭐' : ''}</p>
+                    <p><strong>Points:</strong> ${mission.points}</p>
+                </div>
+            `;
+            document.getElementById('missionNotes').value = '';
+            
+            // Change button text for parent self-assigned missions
+            const submitBtn = document.getElementById('completeMissionBtn');
             if (isParent && isSelfAssigned) {
-                // Auto-complete for parent self-assigned missions
-                if (confirm(`Mark "${mission.name}" as complete?`)) {
-                    completeSelfMission(mission);
-                }
+                submitBtn.textContent = 'Complete';
             } else {
-                // Normal submission flow for approval
-                document.getElementById('completeMissionInfo').innerHTML = `
-                    <div class="card-body">
-                        <p><strong>Mission:</strong> ${mission.name}${mission.isSideMission ? ' ⭐' : ''}</p>
-                        <p><strong>Points:</strong> ${mission.points}</p>
-                    </div>
-                `;
-                document.getElementById('missionNotes').value = '';
-                window.selectedMission = mission;
-                showModal('completeMissionModal');
+                submitBtn.textContent = 'Submit for Approval';
             }
+            
+            window.selectedMission = mission;
+            showModal('completeMissionModal');
         };
 
         async function completeSelfMission(mission) {
@@ -1494,19 +1494,32 @@
 
         window.submitMissionCompletion = async () => {
             if (!window.selectedMission) return;
+            
+            const isParent = currentMember && currentMember.role === 'parent';
+            const isSelfAssigned = window.selectedMission.assignedTo.length === 1 && 
+                                   window.selectedMission.assignedTo[0] === currentUser.uid;
+            
             try {
-                await addDoc(collection(db, 'choreSubmissions'), {
-                    familyId: currentFamily.id,
-                    choreId: window.selectedMission.id,
-                    userId: currentUser.uid,
-                    submittedAt: serverTimestamp(),
-                    status: 'pending',
-                    notes: document.getElementById('missionNotes').value.trim(),
-                    isMission: true
-                });
-                closeModal('completeMissionModal');
-                window.selectedMission = null;
-                alert('Mission submitted for approval!');
+                if (isParent && isSelfAssigned) {
+                    // Parent self-assigned: auto-approve and complete immediately
+                    await completeSelfMission(window.selectedMission);
+                    closeModal('completeMissionModal');
+                    window.selectedMission = null;
+                } else {
+                    // Kid or parent assigning to others: submit for approval
+                    await addDoc(collection(db, 'choreSubmissions'), {
+                        familyId: currentFamily.id,
+                        choreId: window.selectedMission.id,
+                        userId: currentUser.uid,
+                        submittedAt: serverTimestamp(),
+                        status: 'pending',
+                        notes: document.getElementById('missionNotes').value.trim(),
+                        isMission: true
+                    });
+                    closeModal('completeMissionModal');
+                    window.selectedMission = null;
+                    alert('Mission submitted for approval!');
+                }
             } catch (e) { console.error(e); alert('Failed to submit'); }
         };
 
