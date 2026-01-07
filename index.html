@@ -1039,16 +1039,11 @@
         function updateMissions() {
             const list = document.getElementById('missionsList');
             
-            // Get user's approved OR pending submissions to filter out completed/submitted missions
-            const completedOrPendingMissionIds = submissions
-                .filter(s => (s.status === 'approved' || s.status === 'pending') && s.userId === currentUser.uid && s.isMission)
-                .map(s => s.choreId);
-            
+            // Only show missions that are active (not completed)
             const visibleMissions = missions.filter(m => 
-                m.isActive && 
+                m.isActive === true &&
                 m.status === 'active' &&
-                (m.assignedTo.length === 0 || m.assignedTo.includes(currentUser.uid)) &&
-                !completedOrPendingMissionIds.includes(m.id) // Exclude completed/pending missions
+                (m.assignedTo.length === 0 || m.assignedTo.includes(currentUser.uid))
             );
             
             if (visibleMissions.length === 0) {
@@ -1173,7 +1168,10 @@
                                     ${m.name}
                                     ${m.isSideMission ? '<span class="card-badge side-mission">⭐ SIDE MISSION</span>' : ''}
                                 </div>
-                                <span class="card-badge ${m.isSideMission ? 'side-mission-points' : 'points'}">${m.points} pts</span>
+                                <div style="display: flex; gap: 10px; align-items: center;">
+                                    <span class="card-badge ${m.isSideMission ? 'side-mission-points' : 'points'}">${m.points} pts</span>
+                                    <button class="remove-btn" onclick="event.stopPropagation(); archiveMission('${m.id}')">Archive</button>
+                                </div>
                             </div>
                             <div class="card-body">
                                 ${m.description ? `<p>${m.description}</p>` : ''}
@@ -1318,9 +1316,15 @@
                     completedSubmissions = submissions.filter(s => s.status === 'approved');
                     completedTasks = tasks.filter(t => t.status === 'approved');
                 } else {
-                    // Kids clear only their own
-                    completedSubmissions = submissions.filter(s => s.status === 'approved' && s.userId === currentUser.uid);
-                    completedTasks = tasks.filter(t => t.status === 'approved' && t.submittedBy === currentUser.uid);
+                    // Kids clear only their own - use OR logic to match display
+                    completedSubmissions = submissions.filter(s => 
+                        s.status === 'approved' && 
+                        (s.userId === currentUser.uid || s.submittedBy === currentUser.uid)
+                    );
+                    completedTasks = tasks.filter(t => 
+                        t.status === 'approved' && 
+                        (t.submittedBy === currentUser.uid || t.userId === currentUser.uid)
+                    );
                 }
                 
                 for (const sub of completedSubmissions) {
@@ -1334,6 +1338,22 @@
             } catch (e) {
                 console.error(e);
                 alert('Failed to clear completed list');
+            }
+        };
+
+        window.archiveMission = async (missionId) => {
+            if (!confirm('Archive this mission? It will be removed from the queue.')) return;
+            
+            try {
+                await updateDoc(doc(db, 'missions', missionId), {
+                    isActive: false,
+                    archivedAt: serverTimestamp(),
+                    archivedBy: currentUser.uid
+                });
+                alert('Mission archived');
+            } catch (e) {
+                console.error(e);
+                alert('Failed to archive mission');
             }
         };
 
@@ -1460,6 +1480,13 @@
                     pointsAwarded: finalPoints,
                     notes: 'Self-completed',
                     isMission: true
+                });
+                
+                // Mark the mission itself as completed
+                await updateDoc(doc(db, 'missions', mission.id), {
+                    isActive: false,
+                    completedAt: serverTimestamp(),
+                    completedBy: currentUser.uid
                 });
                 
                 alert(`Mission completed! +${finalPoints} points`);
@@ -1623,6 +1650,16 @@
                         await updateDoc(doc(db, 'choreSubmissions', selectedSubmission.id), {
                             status: 'approved', reviewedBy: currentUser.uid, reviewedAt: serverTimestamp(), pointsAwarded: finalPoints
                         });
+                        
+                        // Mark the mission itself as completed
+                        const missionDoc = missions.find(x => x.id === selectedSubmission.choreId);
+                        if (missionDoc) {
+                            await updateDoc(doc(db, 'missions', missionDoc.id), {
+                                isActive: false,
+                                completedAt: serverTimestamp(),
+                                completedBy: selectedSubmission.userId
+                            });
+                        }
                     } else {
                         await updateDoc(doc(db, 'choreSubmissions', selectedSubmission.id), {
                             status: 'rejected', reviewedBy: currentUser.uid, reviewedAt: serverTimestamp(),
