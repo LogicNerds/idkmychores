@@ -18,7 +18,7 @@
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: linear-gradient(135deg, var(--primary-start) 0%, var(--primary-end) 100%); min-height: 100vh; }
         .container { max-width: 500px; margin: 0 auto; min-height: 100vh; background: white; box-shadow: 0 0 50px rgba(0,0,0,0.2); }
         .hidden { display: none; }
-        .login-screen { padding: 40px 20px; text-align: center; min-height: 100vh; display: flex; flex-direction: column; justify-content: center; align-items: center; background: linear-gradient(135deg, var(--primary-start) 0%, var(--primary-end) 100%); }
+        .login-screen { position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 1; padding: 40px 20px; text-align: center; min-height: 100vh; display: flex; flex-direction: column; justify-content: center; align-items: center; background: linear-gradient(135deg, var(--primary-start) 0%, var(--primary-end) 100%); }
         .login-screen h1 { color: white; font-size: 3em; margin-bottom: 15px; text-shadow: 2px 2px 4px rgba(0,0,0,0.2); }
         .login-screen p { color: rgba(255,255,255,0.9); margin-bottom: 40px; font-size: 0.95em; font-style: italic; line-height: 1.4; max-width: 300px; }
         .google-signin-btn { background: white; color: #333; padding: 15px 40px; border: none; border-radius: 8px; font-size: 1em; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.15); transition: all 0.2s; }
@@ -82,7 +82,7 @@
         .theme-preview { width: 80px; height: 50px; border-radius: 8px; display: flex; overflow: hidden; }
         .theme-preview-color { flex: 1; }
         .theme-name { font-weight: 600; color: #333; }
-        .setup-screen { padding: 40px 20px; min-height: 100vh; display: flex; flex-direction: column; justify-content: center; align-items: center; background: linear-gradient(135deg, var(--primary-start) 0%, var(--primary-end) 100%); }
+        .setup-screen { position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 1; padding: 40px 20px; min-height: 100vh; display: flex; flex-direction: column; justify-content: center; align-items: center; background: linear-gradient(135deg, var(--primary-start) 0%, var(--primary-end) 100%); }
         .setup-screen h2 { color: white; margin-bottom: 30px; text-align: center; }
         .setup-card { background: white; border-radius: 20px; padding: 30px 20px; margin-bottom: 20px; max-width: 400px; width: 100%; }
         .member-item { display: flex; justify-content: space-between; align-items: center; padding: 12px; background: #f9fafb; border-radius: 10px; margin-bottom: 10px; }
@@ -205,9 +205,17 @@
                     <div class="card-header">
                         <div class="card-title">⚙️ Family Settings</div>
                     </div>
-                    <div class="card-body">
-                        <p><strong>Streaks:</strong> <span id="streaksSetting">Enabled</span></p>
-                        <p><strong>Kids Can Create Tasks:</strong> <span id="kidTasksSetting">Yes</span></p>
+                    <div class="form-group">
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="streaksToggle" onchange="toggleFamilySetting('streaksEnabled')">
+                            <label for="streaksToggle">Enable Streaks 🔥</label>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="kidsTasksToggle" onchange="toggleFamilySetting('kidsCanCreateTasks')">
+                            <label for="kidsTasksToggle">Kids Can Create Tasks</label>
+                        </div>
                     </div>
                 </div>
 
@@ -584,8 +592,11 @@
             document.getElementById('pendingCard').style.display = isParent ? 'block' : 'none';
             document.getElementById('addTaskBtn').style.display = (isParent || currentFamily.settings.kidsCanCreateTasks) ? 'block' : 'none';
             
-            document.getElementById('streaksSetting').textContent = currentFamily.settings.streaksEnabled ? 'Enabled' : 'Disabled';
-            document.getElementById('kidTasksSetting').textContent = currentFamily.settings.kidsCanCreateTasks ? 'Yes' : 'No';
+            // Update checkbox states
+            if (isParent) {
+                document.getElementById('streaksToggle').checked = currentFamily.settings.streaksEnabled;
+                document.getElementById('kidsTasksToggle').checked = currentFamily.settings.kidsCanCreateTasks;
+            }
         }
 
         function updateStats() {
@@ -897,6 +908,24 @@
         window.closeDisclaimer = () => {
             document.getElementById('disclaimerDrawer').classList.remove('open');
             document.getElementById('disclaimerOverlay').classList.remove('active');
+        };
+
+        // Toggle Family Setting
+        window.toggleFamilySetting = async (setting) => {
+            if (!currentFamily || !currentMember || currentMember.role !== 'parent') return;
+            
+            const checkbox = document.getElementById(setting === 'streaksEnabled' ? 'streaksToggle' : 'kidsTasksToggle');
+            const newValue = checkbox.checked;
+
+            try {
+                await updateDoc(doc(db, 'families', currentFamily.id), {
+                    [`settings.${setting}`]: newValue
+                });
+            } catch (error) {
+                console.error('Error updating setting:', error);
+                alert('Failed to update setting. Please try again.');
+                checkbox.checked = !newValue; // Revert on error
+            }
         };
 
         // Theme management
