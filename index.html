@@ -66,6 +66,7 @@
         .modal-content { background: white; border-radius: 20px; padding: 30px 20px; max-width: 400px; width: 100%; max-height: 80vh; overflow-y: auto; }
         .modal-content h2 { color: #333; margin-bottom: 20px; font-size: 1.5em; }
         .form-group { margin-bottom: 20px; }
+        .checkbox-group { display: flex; align-items: center; gap: 10px; }
         .form-group label { display: block; color: #666; margin-bottom: 8px; font-weight: 600; font-size: 0.9em; }
         .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 12px; border: 2px solid #e0e0e0; border-radius: 10px; font-size: 1em; font-family: inherit; transition: border-color 0.2s; }
         .form-group input:focus, .form-group select:focus, .form-group textarea:focus { outline: none; border-color: var(--accent-primary); }
@@ -680,31 +681,33 @@
         });
 
         async function checkFamilyStatus() {
-            try {
-                const fq = query(collection(db, 'families'), where('ownerId', '==', currentUser.uid));
-                const fs = await getDocs(fq);
-                if (!fs.empty) {
-                    currentFamily = { id: fs.docs[0].id, ...fs.docs[0].data() };
-                    await loadMember(); showScreen('main'); loadAll(); return;
-                }
-                const mq = query(collection(db, 'familyMembers'), where('email', '==', currentUser.email));
-                const ms = await getDocs(mq);
-                if (!ms.empty) {
-                    const md = ms.docs[0].data();
-                    if (md.status === 'pending' && !md.userId) {
+            const fq = query(collection(db, 'families'), where('ownerId', '==', currentUser.uid));
+            const fs = await getDocs(fq);
+            if (!fs.empty) {
+                currentFamily = { id: fs.docs[0].id, ...fs.docs[0].data() };
+                await loadMember(); showScreen('main'); loadAll(); return;
+            }
+            const mq = query(collection(db, 'familyMembers'), where('email', '==', currentUser.email));
+            const ms = await getDocs(mq);
+            if (!ms.empty) {
+                const md = ms.docs[0].data();
+                if (md.status === 'pending' && !md.userId) {
+                    try {
                         await updateDoc(doc(db, 'familyMembers', ms.docs[0].id), {
                             userId: currentUser.uid, status: 'active', joinedAt: serverTimestamp()
                         });
-                    }
-                    const fd = await getDoc(doc(db, 'families', md.familyId));
-                    if (fd.exists()) {
-                        currentFamily = { id: fd.id, ...fd.data() };
-                        await loadMember(); showScreen('main'); loadAll(); return;
+                    } catch (e) {
+                        console.error('Error updating member status:', e);
                     }
                 }
-                showScreen('main');
-                updateUI(); // Show no family state
-            } catch (e) { console.error(e); alert('Error loading family'); }
+                const fd = await getDoc(doc(db, 'families', md.familyId));
+                if (fd.exists()) {
+                    currentFamily = { id: fd.id, ...fd.data() };
+                    await loadMember(); showScreen('main'); loadAll(); return;
+                }
+            }
+            showScreen('main');
+            updateUI(); // Show no family state
         }
 
         async function loadMember() {
